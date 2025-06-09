@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Menu, Music, User, LogIn, LogOut, Search as SearchIcon, ListMusic, GitBranch } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useState } from 'react'; // Added import
 
 export default function Header() {
   const { user, loading, isUserProcessing, setIsUserProcessing } = useAuthContext();
