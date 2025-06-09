@@ -1,3 +1,4 @@
+
 "use client";
 
 import AuthForm from "@/components/auth/AuthForm";
@@ -9,6 +10,7 @@ import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuthContext } from "@/context/AuthContext";
 import { useEffect } from "react";
+import { Button } from "@/components/ui/button";
 
 export default function LoginPage() {
   const router = useRouter();
