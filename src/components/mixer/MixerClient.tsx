@@ -1,3 +1,4 @@
+
 // @ts-nocheck
 "use client";
 
@@ -8,13 +9,17 @@ import { Slider } from '@/components/ui/slider';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Play, Pause, StopCircle, Volume2, VolumeX, RefreshCw, Zap, Square } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Play, Pause, StopCircle, RefreshCw, Zap, Square, UploadCloud } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Track {
   id: string;
   title: string;
-  url: string;
+  originalUrl: string; // Keep original URL for reset
+  currentUrl: string; // Can be original URL or object URL
+  file?: File;
+  isCustom?: boolean;
   isPlaying: boolean;
   volume: number; // 0-1 for UI
   delayWet: number; // 0-1 for UI
@@ -24,14 +29,30 @@ interface Track {
   loop: boolean;
 }
 
-const initialTracks: Track[] = [
-  { id: 'track1', title: 'Ominous Loop', url: 'https://cdn.jsdelivr.net/gh/Tonejs/Tone.js/examples/audio/drum-samples/loops/ominous.mp3', isPlaying: false, volume: 0.75, delayWet: 0, delayTime: 0.2, delayFeedback: 0.3, isMuted: false, loop: true },
-  { id: 'track2', title: 'Casio Synth', url: 'https://cdn.jsdelivr.net/gh/Tonejs/Tone.js/examples/audio/casio/C2.mp3', isPlaying: false, volume: 0.75, delayWet: 0, delayTime: 0.2, delayFeedback: 0.3, isMuted: false, loop: false },
-  { id: 'track3', title: 'Kick Drum', url: 'https://cdn.jsdelivr.net/gh/Tonejs/Tone.js/examples/audio/drum-samples/Loops/gabba.mp3', isPlaying: false, volume: 0.75, delayWet: 0.1, delayTime: 0.3, delayFeedback: 0.4, isMuted: false, loop: true },
+const initialTracksData: Omit<Track, 'originalUrl' | 'currentUrl' | 'file' | 'isCustom' | 'isPlaying' | 'volume' | 'delayWet' | 'delayTime' | 'delayFeedback' | 'isMuted' | 'loop'> & { url: string }[] = [
+  { id: 'track1', title: 'Ominous Loop', url: 'https://cdn.jsdelivr.net/gh/Tonejs/Tone.js/examples/audio/drum-samples/loops/ominous.mp3' },
+  { id: 'track2', title: 'Casio Synth C2', url: 'https://cdn.jsdelivr.net/gh/Tonejs/Tone.js/examples/audio/casio/C2.mp3' },
+  { id: 'track3', title: 'Gabba Kick Loop', url: 'https://cdn.jsdelivr.net/gh/Tonejs/Tone.js/examples/audio/drum-samples/Loops/gabba.mp3' },
 ];
 
+const getDefaultTracks = (): Track[] => initialTracksData.map(t => ({
+    ...t,
+    originalUrl: t.url,
+    currentUrl: t.url,
+    file: undefined,
+    isCustom: false,
+    isPlaying: false,
+    volume: 0.75,
+    delayWet: 0,
+    delayTime: 0.2,
+    delayFeedback: 0.3,
+    isMuted: false,
+    loop: t.title.includes('Loop'), // Default loop for tracks with "Loop" in title
+}));
+
+
 export default function MixerClient() {
-  const [tracks, setTracks] = useState<Track[]>(initialTracks);
+  const [tracks, setTracks] = useState<Track[]>(getDefaultTracks());
   const [isAudioContextStarted, setIsAudioContextStarted] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
@@ -40,8 +61,11 @@ export default function MixerClient() {
   const channelsRef = useRef<Map<string, Tone.Channel>>(new Map());
   const delaysRef = useRef<Map<string, Tone.FeedbackDelay>>(new Map());
   const masterVolumeRef = useRef<Tone.Volume | null>(null);
+  // Store object URLs to revoke them on cleanup or replacement
+  const objectUrlsRef = useRef<Map<string, string>>(new Map());
 
-  const initializeAudioNode = useCallback((track: Track) => {
+
+  const initializeAudioNode = useCallback((track: Track, forceReload: boolean = false) => {
     let player = playersRef.current.get(track.id);
     let channel = channelsRef.current.get(track.id);
     let delay = delaysRef.current.get(track.id);
@@ -50,41 +74,66 @@ export default function MixerClient() {
       masterVolumeRef.current = new Tone.Volume(Tone.gainToDb(0.75)).toDestination();
     }
     
-    if (player) player.dispose();
-    if (channel) channel.dispose();
-    if (delay) delay.dispose();
+    // Dispose existing nodes if they exist, or if forceReload is true (for uploaded files)
+    if (player && (forceReload || player.buffer.url !== track.currentUrl)) player.dispose();
+    if (channel && forceReload) channel.dispose(); // Channel params can be updated, no need to dispose unless track source changes significantly
+    if (delay && forceReload) delay.dispose(); // Delay params can be updated
 
-    player = new Tone.Player({ url: track.url, loop: track.loop }).sync().start(0);
-    channel = new Tone.Channel(Tone.gainToDb(track.volume), 0); // pan is 0 (center)
-    channel.mute = track.isMuted;
-    delay = new Tone.FeedbackDelay({
-      delayTime: track.delayTime, // Assuming this is 0-1 mapped to 0-1s
-      feedback: track.delayFeedback,
-      wet: track.delayWet,
-    });
+    // Re-create player only if it doesn't exist or if its URL has changed
+    if (!playersRef.current.has(track.id) || forceReload || playersRef.current.get(track.id)?.buffer.url !== track.currentUrl) {
+        player = new Tone.Player({ url: track.currentUrl, loop: track.loop }).sync().start(0);
+        playersRef.current.set(track.id, player);
+    } else {
+        player = playersRef.current.get(track.id)!;
+        player.loop = track.loop; // Ensure loop status is up-to-date
+    }
+    
+    if (!channelsRef.current.has(track.id) || forceReload) {
+        channel = new Tone.Channel(Tone.gainToDb(track.volume), 0);
+        channelsRef.current.set(track.id, channel);
+    } else {
+        channel = channelsRef.current.get(track.id)!;
+        channel.volume.value = Tone.gainToDb(track.volume);
+        channel.mute = track.isMuted;
+    }
 
+    if (!delaysRef.current.has(track.id) || forceReload) {
+        delay = new Tone.FeedbackDelay({
+            delayTime: track.delayTime,
+            feedback: track.delayFeedback,
+            wet: track.delayWet,
+        });
+        delaysRef.current.set(track.id, delay);
+    } else {
+        delay = delaysRef.current.get(track.id)!;
+        delay.delayTime.value = track.delayTime;
+        delay.feedback.value = track.delayFeedback;
+        delay.wet.value = track.delayWet;
+    }
+    
     player.chain(channel, delay, masterVolumeRef.current);
-
-    playersRef.current.set(track.id, player);
-    channelsRef.current.set(track.id, channel);
-    delaysRef.current.set(track.id, delay);
     
     return { player, channel, delay };
   }, []);
 
 
   useEffect(() => {
-    if (!isAudioContextStarted || !Tone.Transport.started) return;
-
+    if (!isAudioContextStarted) return;
+    
+    setIsLoading(true);
     const loadPromises = tracks.map(track => {
-      const {player, channel, delay} = initializeAudioNode(track);
+      const { player } = initializeAudioNode(track, track.isCustom); // Force reload if custom
       return player.loaded;
     });
     
     Promise.all(loadPromises)
       .then(() => {
         setIsLoading(false);
-        toast({ title: "Mixer Ready", description: "All tracks loaded." });
+        if (tracks.some(t => t.isCustom)) {
+            toast({ title: "Custom Track Loaded", description: "Your uploaded audio is ready in the mixer." });
+        } else {
+            toast({ title: "Mixer Ready", description: "All tracks loaded." });
+        }
       })
       .catch(error => {
         console.error("Error loading tracks:", error);
@@ -92,7 +141,12 @@ export default function MixerClient() {
         setIsLoading(false);
       });
 
+    // Cleanup object URLs
     return () => {
+      objectUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
+      objectUrlsRef.current.clear();
+      // Full Tone.js cleanup on component unmount or if audio context is stopped
+      if (Tone.Transport.started) Tone.Transport.stop();
       playersRef.current.forEach(p => p.dispose());
       channelsRef.current.forEach(c => c.dispose());
       delaysRef.current.forEach(d => d.dispose());
@@ -112,8 +166,42 @@ export default function MixerClient() {
       await Tone.start();
       Tone.Transport.bpm.value = 120; // Default BPM
       setIsAudioContextStarted(true);
+      setTracks(getDefaultTracks()); // Reset to default tracks when context starts
       toast({ title: "Audio Context Started", description: "Mixer is now active." });
     }
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>, trackId: string) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const newObjectUrl = URL.createObjectURL(file);
+    
+    // Revoke previous object URL for this track if it exists
+    const oldObjectUrl = objectUrlsRef.current.get(trackId);
+    if (oldObjectUrl) {
+      URL.revokeObjectURL(oldObjectUrl);
+    }
+    objectUrlsRef.current.set(trackId, newObjectUrl); // Store new one
+
+    setTracks(prevTracks =>
+      prevTracks.map(t => {
+        if (t.id === trackId) {
+          // Stop player before changing source
+          playersRef.current.get(t.id)?.stop();
+          return { 
+            ...t, 
+            title: file.name, 
+            currentUrl: newObjectUrl, 
+            file: file, 
+            isCustom: true,
+            isPlaying: false // Reset playing state
+          };
+        }
+        return t;
+      })
+    );
+    // Target specific track for re-initialization in the useEffect via 'tracks' dependency change
   };
 
   const handlePlayPauseTrack = (trackId: string) => {
@@ -125,7 +213,7 @@ export default function MixerClient() {
           if (player) {
             if (!t.isPlaying) {
                if (Tone.Transport.state !== "started") Tone.Transport.start();
-               player.start();
+               player.start(); // Start at current Tone.Transport position
             } else {
                player.stop();
             }
@@ -161,7 +249,7 @@ export default function MixerClient() {
           }
           if (delayNode) {
             if (param === 'delayWet') delayNode.wet.value = value as number;
-            if (param === 'delayTime') delayNode.delayTime.value = value as number; // Max 1s
+            if (param === 'delayTime') delayNode.delayTime.value = value as number; 
             if (param === 'delayFeedback') delayNode.feedback.value = value as number;
           }
           if (playerNode && param === 'loop') {
@@ -177,20 +265,19 @@ export default function MixerClient() {
   const handlePlayAll = () => {
     if (!isAudioContextStarted || isLoading) return;
     if (Tone.Transport.state !== "started") Tone.Transport.start();
-    tracks.forEach(track => {
-      const player = playersRef.current.get(track.id);
-      if (player && !track.isPlaying) player.start();
+    // Ensure all players are started from the beginning of their loop or sound
+    playersRef.current.forEach((player, id) => {
+        if (!tracks.find(t => t.id === id)?.isPlaying) {
+            player.start();
+        }
     });
     setTracks(prev => prev.map(t => ({ ...t, isPlaying: true })));
   };
 
   const handleStopAll = () => {
     if (!isAudioContextStarted || isLoading) return;
-    Tone.Transport.stop(); // This stops all synced players
-    tracks.forEach(track => {
-        const player = playersRef.current.get(track.id);
-        if (player) player.stop(); // Ensure each player is explicitly stopped as well
-    });
+    Tone.Transport.stop(); 
+    playersRef.current.forEach(player => player.stop());
     setTracks(prev => prev.map(t => ({ ...t, isPlaying: false })));
   };
   
@@ -214,7 +301,7 @@ export default function MixerClient() {
 
   if (isLoading) {
     return (
-        <div className="flex flex-col items-center justify-center space-y-4 p-8">
+        <div className="flex flex-col items-center justify-center space-y-4 p-8 min-h-[300px]">
          <RefreshCw className="h-12 w-12 animate-spin text-primary" />
          <p className="text-lg text-muted-foreground">Loading audio tracks...</p>
         </div>
@@ -228,10 +315,10 @@ export default function MixerClient() {
           <CardTitle className="font-headline text-xl">Master Controls</CardTitle>
         </CardHeader>
         <CardContent className="flex space-x-4">
-          <Button onClick={handlePlayAll} variant="default">
+          <Button onClick={handlePlayAll} variant="default" disabled={isLoading}>
             <Play className="mr-2 h-4 w-4" /> Play All
           </Button>
-          <Button onClick={handleStopAll} variant="destructive">
+          <Button onClick={handleStopAll} variant="destructive" disabled={isLoading}>
             <StopCircle className="mr-2 h-4 w-4" /> Stop All
           </Button>
         </CardContent>
@@ -241,15 +328,29 @@ export default function MixerClient() {
         {tracks.map(track => (
           <Card key={track.id} className="shadow-lg flex flex-col">
             <CardHeader>
-              <CardTitle className="font-headline text-lg">{track.title}</CardTitle>
-              <CardDescription className="text-xs truncate">{track.url}</CardDescription>
+              <CardTitle className="font-headline text-lg truncate" title={track.title}>{track.title}</CardTitle>
+              <CardDescription className="text-xs truncate">{track.isCustom ? "Custom Audio" : track.originalUrl}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 flex-grow">
+              <div className="space-y-2">
+                <Label htmlFor={`upload-${track.id}`} className="flex items-center cursor-pointer text-sm text-primary hover:underline">
+                  <UploadCloud className="mr-2 h-4 w-4" />
+                  {track.isCustom ? "Change Custom Audio" : "Upload Custom Audio"}
+                </Label>
+                <Input 
+                  id={`upload-${track.id}`}
+                  type="file" 
+                  accept="audio/*" 
+                  className="text-xs"
+                  onChange={(e) => handleFileUpload(e, track.id)} 
+                />
+              </div>
+
               <div className="flex items-center space-x-2">
-                <Button onClick={() => handlePlayPauseTrack(track.id)} variant="outline" size="icon">
+                <Button onClick={() => handlePlayPauseTrack(track.id)} variant="outline" size="icon" disabled={isLoading}>
                   {track.isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                 </Button>
-                 <Button onClick={() => handleStopTrack(track.id)} variant="outline" size="icon" title="Stop this track">
+                 <Button onClick={() => handleStopTrack(track.id)} variant="outline" size="icon" title="Stop this track" disabled={isLoading}>
                   <Square className="h-4 w-4" />
                 </Button>
                 <div className="flex items-center space-x-2 ml-auto">
@@ -258,6 +359,7 @@ export default function MixerClient() {
                     id={`mute-${track.id}`}
                     checked={track.isMuted}
                     onCheckedChange={checked => updateTrackParam(track.id, 'isMuted', checked)}
+                    disabled={isLoading}
                   />
                 </div>
               </div>
@@ -269,6 +371,7 @@ export default function MixerClient() {
                   min={0} max={1} step={0.01}
                   value={[track.volume]}
                   onValueChange={([val]) => updateTrackParam(track.id, 'volume', val)}
+                  disabled={isLoading}
                 />
               </div>
               
@@ -278,6 +381,7 @@ export default function MixerClient() {
                     id={`loop-${track.id}`}
                     checked={track.loop}
                     onCheckedChange={checked => updateTrackParam(track.id, 'loop', checked)}
+                    disabled={isLoading}
                   />
               </div>
 
@@ -291,24 +395,27 @@ export default function MixerClient() {
                       min={0} max={1} step={0.01}
                       value={[track.delayWet]}
                       onValueChange={([val]) => updateTrackParam(track.id, 'delayWet', val)}
+                      disabled={isLoading}
                     />
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor={`delayTime-${track.id}`}>Time (0-1s)</Label>
                     <Slider
                       id={`delayTime-${track.id}`}
-                      min={0} max={1} step={0.01} // Maps to 0-1 seconds
+                      min={0} max={1} step={0.01} 
                       value={[track.delayTime]}
                       onValueChange={([val]) => updateTrackParam(track.id, 'delayTime', val)}
+                      disabled={isLoading}
                     />
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor={`delayFeedback-${track.id}`}>Feedback</Label>
                     <Slider
                       id={`delayFeedback-${track.id}`}
-                      min={0} max={0.95} step={0.01} // Feedback > 1 can be too much
+                      min={0} max={0.95} step={0.01} 
                       value={[track.delayFeedback]}
                       onValueChange={([val]) => updateTrackParam(track.id, 'delayFeedback', val)}
+                      disabled={isLoading}
                     />
                   </div>
                 </div>
@@ -320,3 +427,4 @@ export default function MixerClient() {
     </div>
   );
 }
+
