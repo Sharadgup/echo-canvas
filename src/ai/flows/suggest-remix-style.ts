@@ -4,21 +4,21 @@
  * @fileOverview A Genkit flow to suggest remix styles for a given song.
  *
  * - suggestRemixStyle - A function that suggests remix styles.
- * - SongDetailsSchema - The input type for the suggestRemixStyle function.
- * - RemixSuggestionSchema - The return type for the suggestRemixStyle function.
+ * - SongDetails - The input type for the suggestRemixStyle function.
+ * - RemixSuggestion - The return type for the suggestRemixStyle function.
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 
-export const SongDetailsSchema = z.object({
+const SongDetailsSchema = z.object({
   title: z.string().describe('The title of the song.'),
   artist: z.string().optional().describe('The artist of the song (optional).'),
   currentStyle: z.string().optional().describe('The current musical style or genre of the song (optional).'),
 });
 export type SongDetails = z.infer<typeof SongDetailsSchema>;
 
-export const RemixSuggestionSchema = z.object({
+const RemixSuggestionSchema = z.object({
   suggestedStyle: z.string().describe('The new musical style suggested for the remix (e.g., Lo-fi, Deep House, Synthwave).'),
   ideas: z.array(z.string()).describe('A list of 2-3 specific creative ideas for implementing the remix in the suggested style.'),
   reasoning: z.string().describe('A brief explanation of why this style and these ideas would be a good fit for the original song.'),
@@ -72,3 +72,4 @@ const suggestRemixStyleFlow = ai.defineFlow(
     return output;
   }
 );
+
