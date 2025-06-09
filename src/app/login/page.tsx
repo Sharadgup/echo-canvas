@@ -54,7 +54,14 @@ export default function LoginPage() {
       router.push("/profile");
     } catch (error: any) {
       console.error("Google login error:", error);
-      toast({ title: "Google Login Failed", description: error.message || "Could not sign in with Google. Please try again.", variant: "destructive" });
+      if (error.code === 'auth/popup-closed-by-user') {
+        toast({ title: "Google Login Canceled", description: "You closed the Google Sign-In window before completing the process.", variant: "default" });
+      } else if (error.code === 'auth/cancelled-popup-request') {
+        toast({ title: "Google Login Canceled", description: "Multiple Google Sign-In windows were opened. Please try again.", variant: "default" });
+      }
+      else {
+        toast({ title: "Google Login Failed", description: error.message || "Could not sign in with Google. Please try again.", variant: "destructive" });
+      }
     } finally {
       setIsUserProcessing(false);
     }

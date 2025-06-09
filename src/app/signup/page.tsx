@@ -53,7 +53,14 @@ export default function SignupPage() {
       router.push("/profile");
     } catch (error: any) {
       console.error("Google signup error:", error);
-      toast({ title: "Google Signup Failed", description: error.message || "Could not sign up with Google. Please try again.", variant: "destructive" });
+      if (error.code === 'auth/popup-closed-by-user') {
+        toast({ title: "Google Signup Canceled", description: "You closed the Google Sign-Up window before completing the process.", variant: "default" });
+      } else if (error.code === 'auth/cancelled-popup-request') {
+        toast({ title: "Google Signup Canceled", description: "Multiple Google Sign-Up windows were opened. Please try again.", variant: "default" });
+      }
+      else {
+        toast({ title: "Google Signup Failed", description: error.message || "Could not sign up with Google. Please try again.", variant: "destructive" });
+      }
     } finally {
       setIsUserProcessing(false);
     }
