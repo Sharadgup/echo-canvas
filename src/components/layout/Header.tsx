@@ -1,4 +1,4 @@
-// @ts-nocheck
+
 "use client";
 
 import Link from 'next/link';
@@ -8,7 +8,7 @@ import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { Menu, Music, User, LogIn, LogOut, Search as SearchIcon, ListMusic, GitBranch, SlidersHorizontal } from 'lucide-react';
+import { Menu, Music, User, LogIn, LogOut, Search as SearchIcon, ListMusic, GitBranch, SlidersHorizontal, LayoutDashboard } from 'lucide-react'; // Added LayoutDashboard
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react'; 
 
@@ -35,6 +35,7 @@ export default function Header() {
   };
 
   const navLinks = [
+    { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard }, // Added Dashboard
     { href: '/playlist', label: 'Playlist', icon: ListMusic },
     { href: '/visualizer', label: 'Visualizer', icon: GitBranch },
     { href: '/search', label: 'Search', icon: SearchIcon },
