@@ -3,46 +3,59 @@
 @tailwind utilities;
 
 body {
-  font-family: Arial, Helvetica, sans-serif;
+  @apply font-body antialiased;
 }
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
+    --background: 213 56% 88%; /* Light blue #D1DFF2 */
+    --foreground: 215 25% 27%; /* Darker blue-gray for readability on light blue */
+
+    --card: 213 50% 92%; /* Slightly darker/contrasting light blue for cards */
+    --card-foreground: 215 25% 22%;
+
+    --popover: 213 50% 92%;
+    --popover-foreground: 215 25% 22%;
+
+    --primary: 215 68% 56%; /* Saturated blue #4681D9 */
+    --primary-foreground: 0 0% 98%; /* White */
+
+    --secondary: 213 40% 80%; /* A lighter shade of primary or a complementary muted tone */
+    --secondary-foreground: 215 25% 22%;
+
+    --muted: 213 45% 85%; /* Muted tones related to background */
+    --muted-foreground: 215 20% 50%;
+
+    --accent: 260 37% 54%; /* Muted purple #755AB8 */
+    --accent-foreground: 0 0% 98%; /* White */
+
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
+
+    --border: 213 30% 75%; /* Border color related to background/card */
+    --input: 213 40% 90%; /* Input background */
+    --ring: 215 68% 56%; /* Primary color for rings */
+    
     --chart-1: 12 76% 61%;
     --chart-2: 173 58% 39%;
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
     --radius: 0.5rem;
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
+
+    /* Sidebar variables might not be heavily used with a top nav, but keeping for consistency if needed */
+    --sidebar-background: 213 50% 92%;
+    --sidebar-foreground: 215 25% 27%;
+    --sidebar-primary: 215 68% 56%;
     --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 260 37% 54%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 213 30% 75%;
+    --sidebar-ring: 215 68% 56%;
   }
+
   .dark {
+    /* Keeping dark mode defaults for now, can be themed later if needed */
     --background: 0 0% 3.9%;
     --foreground: 0 0% 98%;
     --card: 0 0% 3.9%;
@@ -67,6 +80,7 @@ body {
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
+
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
@@ -84,5 +98,29 @@ body {
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+.pulsating-circle {
+  width: 100px;
+  height: 100px;
+  background-color: hsl(var(--primary));
+  border-radius: 50%;
+  animation: pulse 1.5s infinite ease-in-out;
+  margin: 0 auto;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.9);
+    opacity: 0.7;
   }
 }
