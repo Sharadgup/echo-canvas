@@ -16,15 +16,15 @@ import { useToast } from '@/hooks/use-toast';
 interface Track {
   id: string;
   title: string;
-  originalUrl: string; // Keep original URL for reset
-  currentUrl: string; // Can be original URL or object URL
+  originalUrl: string; 
+  currentUrl: string; 
   file?: File;
   isCustom?: boolean;
   isPlaying: boolean;
-  volume: number; // 0-1 for UI
-  delayWet: number; // 0-1 for UI
-  delayTime: number; // 0-1 for UI (maps to 0-1 seconds)
-  delayFeedback: number; // 0-1 for UI
+  volume: number; 
+  delayWet: number; 
+  delayTime: number; 
+  delayFeedback: number; 
   isMuted: boolean;
   loop: boolean;
 }
@@ -47,7 +47,7 @@ const getDefaultTracks = (): Track[] => initialTracksData.map(t => ({
     delayTime: 0.2,
     delayFeedback: 0.3,
     isMuted: false,
-    loop: t.title.includes('Loop'), // Default loop for tracks with "Loop" in title
+    loop: t.title.includes('Loop'), 
 }));
 
 
@@ -64,71 +64,82 @@ export default function MixerClient() {
   const objectUrlsRef = useRef<Map<string, string>>(new Map());
 
 
-  const initializeAudioNode = useCallback((track: Track, forceReload: boolean = false) => {
-    let player = playersRef.current.get(track.id);
-    let channel = channelsRef.current.get(track.id);
-    let delay = delaysRef.current.get(track.id);
-
-    if (!masterVolumeRef.current) {
-      masterVolumeRef.current = new Tone.Volume(Tone.gainToDb(0.75)).toDestination();
-    }
-    
-    if (player && (forceReload || player.buffer.url !== track.currentUrl)) player.dispose();
-    if (channel && forceReload) channel.dispose(); 
-    if (delay && forceReload) delay.dispose();
-
-    if (!playersRef.current.has(track.id) || forceReload || playersRef.current.get(track.id)?.buffer.url !== track.currentUrl) {
-        player = new Tone.Player({ url: track.currentUrl, loop: track.loop }); // DO NOT .sync().start(0) here
-        playersRef.current.set(track.id, player);
-    } else {
-        player = playersRef.current.get(track.id)!;
-        player.loop = track.loop; 
-    }
-    
-    if (!channelsRef.current.has(track.id) || forceReload) {
-        channel = new Tone.Channel(Tone.gainToDb(track.volume), 0);
-        channelsRef.current.set(track.id, channel);
-    } else {
-        channel = channelsRef.current.get(track.id)!;
-        channel.volume.value = Tone.gainToDb(track.volume);
-        channel.mute = track.isMuted;
-    }
-
-    if (!delaysRef.current.has(track.id) || forceReload) {
-        delay = new Tone.FeedbackDelay({
-            delayTime: track.delayTime,
-            feedback: track.delayFeedback,
-            wet: track.delayWet,
-        });
-        delaysRef.current.set(track.id, delay);
-    } else {
-        delay = delaysRef.current.get(track.id)!;
-        delay.delayTime.value = track.delayTime;
-        delay.feedback.value = track.delayFeedback;
-        delay.wet.value = track.delayWet;
-    }
-    
-    player.chain(channel, delay, masterVolumeRef.current);
-    
-    return { player, channel, delay };
-  }, []);
-
-
   useEffect(() => {
     if (!isAudioContextStarted) return;
-    
+
     setIsLoading(true);
+    const activeTrackIds = new Set<string>();
+
     const loadPromises = tracks.map(track => {
-      const { player } = initializeAudioNode(track, track.isCustom); 
-      return player.loaded;
+        activeTrackIds.add(track.id);
+
+        let player = playersRef.current.get(track.id);
+        let channel = channelsRef.current.get(track.id);
+        let delay = delaysRef.current.get(track.id);
+        let playerRecreated = false;
+
+        if (!masterVolumeRef.current) {
+            masterVolumeRef.current = new Tone.Volume(Tone.gainToDb(0.75)).toDestination();
+        }
+
+        // Determine if player needs full recreation
+        // Condition: No player exists, or existing player is loaded and its buffer URL is different from current track URL.
+        if (!player || (player.loaded && player.buffer && player.buffer.url !== track.currentUrl)) {
+            player?.dispose(); // Dispose old player if it exists and URL changed
+            player = new Tone.Player({ url: track.currentUrl, loop: track.loop });
+            playersRef.current.set(track.id, player);
+            playerRecreated = true;
+        } else if (player) {
+             // Player exists and URL is the same (or not loaded yet, will load currentUrl), update loop
+            player.loop = track.loop;
+        }
+        
+        // If player was recreated, or channel/delay don't exist, they also need recreation.
+        if (playerRecreated || !channel) {
+            channel?.dispose();
+            channel = new Tone.Channel(Tone.gainToDb(track.volume), 0); // pan = 0
+            channelsRef.current.set(track.id, channel);
+        }
+        channel.volume.value = Tone.gainToDb(track.volume); // Always update
+        channel.mute = track.isMuted; // Always update
+
+        if (playerRecreated || !delay) {
+            delay?.dispose();
+            delay = new Tone.FeedbackDelay({
+                delayTime: track.delayTime,
+                feedback: track.delayFeedback,
+                wet: track.delayWet,
+            });
+            delaysRef.current.set(track.id, delay);
+        }
+        delay.delayTime.value = track.delayTime; // Always update
+        delay.feedback.value = track.delayFeedback; // Always update
+        delay.wet.value = track.delayWet; // Always update
+        
+        // Always re-chain. Player.chain disconnects previous outputs.
+        player.chain(channel, delay, masterVolumeRef.current);
+        
+        return player.loaded;
+    });
+
+    // Cleanup nodes for tracks that might have been removed (if applicable in future)
+    playersRef.current.forEach((_, id) => {
+        if (!activeTrackIds.has(id)) {
+            playersRef.current.get(id)?.dispose();
+            playersRef.current.delete(id);
+            channelsRef.current.get(id)?.dispose();
+            channelsRef.current.delete(id);
+            delaysRef.current.get(id)?.dispose();
+            delaysRef.current.delete(id);
+        }
     });
     
     Promise.all(loadPromises)
       .then(() => {
         setIsLoading(false);
-        if (tracks.some(t => t.isCustom && !t.originalUrl.startsWith('data:'))) { // Avoid toast for initial default tracks if they were somehow marked custom
+        if (tracks.some(t => t.isCustom && !t.originalUrl.startsWith('data:'))) {
             toast({ title: "Custom Track Loaded", description: "Your uploaded audio is ready in the mixer." });
-        } else if (!tracks.some(t => t.isCustom)) { // Only toast if not a custom track load
+        } else if (!tracks.some(t => t.isCustom)) { 
             toast({ title: "Mixer Ready", description: "All tracks loaded." });
         }
       })
@@ -139,10 +150,16 @@ export default function MixerClient() {
       });
 
     return () => {
+      // Component unmount cleanup
       objectUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
       objectUrlsRef.current.clear();
-      if (Tone.Transport.state === "started" || Tone.Transport.state === "paused") Tone.Transport.stop();
-      playersRef.current.forEach(p => p.dispose());
+      if (Tone.Transport.state === "started" || Tone.Transport.state === "paused") {
+          Tone.Transport.stop();
+      }
+      playersRef.current.forEach(p => {
+        if (p.state === "started") p.stop();
+        p.dispose();
+      });
       channelsRef.current.forEach(c => c.dispose());
       delaysRef.current.forEach(d => d.dispose());
       playersRef.current.clear();
@@ -153,7 +170,7 @@ export default function MixerClient() {
         masterVolumeRef.current = null;
       }
     };
-  }, [isAudioContextStarted, tracks, initializeAudioNode, toast]);
+  }, [isAudioContextStarted, tracks, toast]);
 
 
   const handleStartAudioContext = async () => {
@@ -161,8 +178,6 @@ export default function MixerClient() {
       await Tone.start();
       Tone.Transport.bpm.value = 120; 
       setIsAudioContextStarted(true);
-      // Reset to default tracks to ensure clean state if re-starting context
-      // This also triggers the useEffect to load these tracks
       setTracks(getDefaultTracks()); 
       toast({ title: "Audio Context Started", description: "Mixer is now active." });
     }
@@ -183,7 +198,7 @@ export default function MixerClient() {
     setTracks(prevTracks =>
       prevTracks.map(t => {
         if (t.id === trackId) {
-          playersRef.current.get(t.id)?.stop();
+          playersRef.current.get(t.id)?.stop(); // Stop current playback before changing source
           return { 
             ...t, 
             title: file.name, 
@@ -202,21 +217,22 @@ export default function MixerClient() {
     if (!isAudioContextStarted || isLoading) return;
 
     const player = playersRef.current.get(trackId);
-    if (!player) return;
+    if (!player || !player.loaded) {
+        toast({ title: "Track not ready", description: "Please wait for the track to load.", variant: "default"});
+        return;
+    }
 
-    // This action will be reflected in the 'tracks' state update,
-    // which then triggers re-render.
     setTracks(prevTracks =>
       prevTracks.map(t => {
         if (t.id === trackId) {
           if (!t.isPlaying) {
             if (Tone.Transport.state !== "started") {
-              Tone.Transport.start("+0.1"); // Start transport slightly in future
+              Tone.Transport.start("+0.1"); 
             }
-            player.sync(); // Sync to transport
-            player.start(undefined, 0); // Start at current/next transport tick, from offset 0 of the buffer
+            player.sync(); 
+            player.start(undefined, 0); 
           } else {
-            player.stop(); // Stops the player in sync with the transport
+            player.stop(); 
           }
           return { ...t, isPlaying: !t.isPlaying };
         }
@@ -239,22 +255,7 @@ export default function MixerClient() {
       prevTracks.map(t => {
         if (t.id === trackId) {
           const updatedTrack = { ...t, [param]: value };
-          const channel = channelsRef.current.get(t.id);
-          const delayNode = delaysRef.current.get(t.id);
-          const playerNode = playersRef.current.get(t.id);
-
-          if (channel) {
-            if (param === 'volume') channel.volume.value = Tone.gainToDb(value as number);
-            if (param === 'isMuted') channel.mute = value as boolean;
-          }
-          if (delayNode) {
-            if (param === 'delayWet') delayNode.wet.value = value as number;
-            if (param === 'delayTime') delayNode.delayTime.value = value as number; 
-            if (param === 'delayFeedback') delayNode.feedback.value = value as number;
-          }
-          if (playerNode && param === 'loop') {
-            playerNode.loop = value as boolean;
-          }
+          // Tone.js node updates are handled by the main useEffect reacting to 'tracks' state change
           return updatedTrack;
         }
         return t;
@@ -270,11 +271,12 @@ export default function MixerClient() {
     
     const updatedTracks = tracks.map(track => {
       const player = playersRef.current.get(track.id);
-      if (player && !track.isPlaying) {
+      if (player && player.loaded && !track.isPlaying) {
         player.sync();
         player.start(undefined, 0); 
+        return { ...track, isPlaying: true };
       }
-      return { ...track, isPlaying: true };
+      return track; // Keep isPlaying true if already playing
     });
     setTracks(updatedTracks);
   };
@@ -282,9 +284,10 @@ export default function MixerClient() {
   const handleStopAll = () => {
     if (!isAudioContextStarted || isLoading) return;
     if (Tone.Transport.state === "started" || Tone.Transport.state === "paused") {
-        Tone.Transport.stop();
+        Tone.Transport.stop(); // This will stop all synced players
     }
-    playersRef.current.forEach(player => player.stop()); // Ensure players are also explicitly stopped
+    // Explicitly stop to ensure, though transport.stop() should handle synced players.
+    playersRef.current.forEach(player => player.stop()); 
     setTracks(prev => prev.map(t => ({ ...t, isPlaying: false })));
   };
   
@@ -354,7 +357,7 @@ export default function MixerClient() {
               </div>
 
               <div className="flex items-center space-x-2">
-                <Button onClick={() => handlePlayPauseTrack(track.id)} variant="outline" size="icon" disabled={isLoading}>
+                <Button onClick={() => handlePlayPauseTrack(track.id)} variant="outline" size="icon" disabled={isLoading || (!playersRef.current.get(track.id)?.loaded && !track.isPlaying) }>
                   {track.isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                 </Button>
                  <Button onClick={() => handleStopTrack(track.id)} variant="outline" size="icon" title="Stop this track" disabled={isLoading}>
@@ -434,3 +437,4 @@ export default function MixerClient() {
     </div>
   );
 }
+
