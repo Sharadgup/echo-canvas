@@ -1,96 +1,114 @@
 
 "use client";
 
-import { useState, FormEvent, useEffect } from "react";
+import { useState, FormEvent, useEffect, useRef, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Search as SearchIcon, Loader2, Youtube, Play, X, Music, Heart, PlusCircle } from "lucide-react";
+import { Search as SearchIcon, Loader2, Youtube, Play, X, Music, Heart } from "lucide-react";
 import SongCard from "@/components/playlist/SongCard";
 import { useToast } from "@/hooks/use-toast";
 import type { YouTubeMusicSearchResult, YouTubeMusicSearchResponse } from "@/app/actions/youtubeMusicActions";
 import { searchYoutubeMusicAction } from "@/app/actions/youtubeMusicActions";
 
-interface YouTubeMusicSearchPlayerProps {
-  // Props to customize behavior or appearance if needed later
-}
+const DEFAULT_DISCOVER_QUERY = "Top Music Hits";
 
-const predefinedInitialTracks: YouTubeMusicSearchResult[] = [
-  { videoId: "kJQP7kiw5Fk", title: "Bohemian Rhapsody", artist: "Queen", thumbnailUrl: `https://i.ytimg.com/vi/kJQP7kiw5Fk/mqdefault.jpg`, youtubeVideoUrl: `https://www.youtube.com/watch?v=kJQP7kiw5Fk` },
-  { videoId: "3tmd-ClpJxA", title: "Blinding Lights", artist: "The Weeknd", thumbnailUrl: `https://i.ytimg.com/vi/3tmd-ClpJxA/mqdefault.jpg`, youtubeVideoUrl: `https://www.youtube.com/watch?v=3tmd-ClpJxA` },
-  { videoId: "hTWKbfoikeg", title: "Shape of You", artist: "Ed Sheeran", thumbnailUrl: `https://i.ytimg.com/vi/hTWKbfoikeg/mqdefault.jpg`, youtubeVideoUrl: `https://www.youtube.com/watch?v=hTWKbfoikeg` },
-];
-
-
-export default function YouTubeMusicSearchPlayer({}: YouTubeMusicSearchPlayerProps) {
+export default function YouTubeMusicSearchPlayer() {
   const [ytSearchTerm, setYtSearchTerm] = useState("");
-  const [currentSearchQuery, setCurrentSearchQuery] = useState(""); // To store the term used for "Load More"
+  const [currentSearchQuery, setCurrentSearchQuery] = useState(DEFAULT_DISCOVER_QUERY);
   const [ytResults, setYtResults] = useState<YouTubeMusicSearchResult[]>([]);
-  const [isYtLoading, setIsYtLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // For initial discover load or first search
   const [isLoadMoreLoading, setIsLoadMoreLoading] = useState(false);
-  const [hasYtSearched, setHasYtSearched] = useState(false);
+  const [hasLoadedInitialDiscover, setHasLoadedInitialDiscover] = useState(false);
   const [currentPlayingYoutubeTrack, setCurrentPlayingYoutubeTrack] = useState<YouTubeMusicSearchResult | null>(null);
   const [likedTracks, setLikedTracks] = useState<Set<string>>(new Set());
   const [nextPageToken, setNextPageToken] = useState<string | undefined>(undefined);
 
   const { toast } = useToast();
+  const observer = useRef<IntersectionObserver | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
-  const fetchMusic = async (term: string, pageToken?: string) => {
-    if (pageToken) {
-      setIsLoadMoreLoading(true);
-    } else {
-      setIsYtLoading(true);
-      setYtResults([]); // Clear previous results for a new search
+  const fetchMusic = useCallback(async (term: string, pageToken?: string, isDiscoverLoad: boolean = false) => {
+    if (isDiscoverLoad || !pageToken) { // Initial load or new search
+      setIsLoading(true);
+      setYtResults([]);
       setCurrentPlayingYoutubeTrack(null);
+    } else { // Load more
+      setIsLoadMoreLoading(true);
     }
-    setHasYtSearched(true);
+    
     setCurrentSearchQuery(term);
-
 
     try {
       const response: YouTubeMusicSearchResponse = await searchYoutubeMusicAction(term, pageToken);
-      if (pageToken) {
-        setYtResults(prevResults => [...prevResults, ...response.results]);
-      } else {
-        setYtResults(response.results);
-      }
+      
+      setYtResults(prevResults => pageToken ? [...prevResults, ...response.results] : response.results);
       setNextPageToken(response.nextPageToken);
 
-      if (!pageToken && response.results.length > 0) {
+      if (!pageToken && !isDiscoverLoad) { // New search result toast
         toast({ title: "YouTube Music Search Complete", description: `Found ${response.results.length} tracks.` });
-      } else if (!pageToken) {
-         toast({ title: "YouTube Music Search Complete", description: "No tracks found for your query." });
+      } else if (!pageToken && isDiscoverLoad && response.results.length === 0) {
+        toast({ title: "Discover Empty", description: "Could not fetch initial discover tracks." });
       }
-      if (pageToken && response.results.length === 0) {
-        toast({ title: "No More Results", description: "No more tracks to load for this query." });
+       if (pageToken && response.results.length === 0) {
+        // This is normal for infinite scroll when no more results
+        // toast({ title: "No More Results", description: "No more tracks to load for this query." });
       }
+      if (isDiscoverLoad) setHasLoadedInitialDiscover(true);
 
     } catch (error: any) {
       console.error("YouTube Music search error:", error);
       toast({ title: "YouTube Music Search Failed", description: error.message || "Could not fetch YouTube Music tracks.", variant: "destructive" });
     } finally {
-      if (pageToken) {
-        setIsLoadMoreLoading(false);
+      if (isDiscoverLoad || !pageToken) {
+        setIsLoading(false);
       } else {
-        setIsYtLoading(false);
+        setIsLoadMoreLoading(false);
       }
     }
-  };
+  }, [toast]);
   
+  // Initial Discover Load
+  useEffect(() => {
+    if (!hasLoadedInitialDiscover) {
+      fetchMusic(DEFAULT_DISCOVER_QUERY, undefined, true);
+    }
+  }, [fetchMusic, hasLoadedInitialDiscover]);
+
+
+  // Infinite Scroll Intersection Observer
+  useEffect(() => {
+    if (observer.current) observer.current.disconnect();
+
+    observer.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && nextPageToken && !isLoadMoreLoading && !isLoading) {
+        fetchMusic(currentSearchQuery, nextPageToken);
+      }
+    });
+
+    if (loadMoreRef.current) {
+      observer.current.observe(loadMoreRef.current);
+    }
+
+    return () => {
+      if (observer.current) {
+        observer.current.disconnect();
+      }
+    };
+  }, [nextPageToken, isLoadMoreLoading, isLoading, currentSearchQuery, fetchMusic]);
+
+
   const handleYoutubeMusicSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!ytSearchTerm.trim()) return;
-    fetchMusic(ytSearchTerm);
+    if (!ytSearchTerm.trim()) {
+        // If search is cleared, reload discover feed
+        setHasLoadedInitialDiscover(false); // Trigger reload of discover
+        fetchMusic(DEFAULT_DISCOVER_QUERY, undefined, true);
+        return;
+    }
+    setYtSearchTerm(ytSearchTerm.trim()); // Update to trimmed search term
+    fetchMusic(ytSearchTerm.trim()); // New search, no pageToken
   };
-
-  const handleLoadMore = () => {
-    if (!nextPageToken || isLoadMoreLoading) return;
-    // Use currentSearchQuery for "Load More" to ensure consistency with the initial search
-    // If no search was made yet (viewing predefined), use a generic term or the last search term.
-    const termToFetch = currentSearchQuery || "top hits"; 
-    fetchMusic(termToFetch, nextPageToken);
-  };
-
 
   const handleLikeTrack = (track: YouTubeMusicSearchResult) => {
     setLikedTracks(prevLikedTracks => {
@@ -106,16 +124,9 @@ export default function YouTubeMusicSearchPlayer({}: YouTubeMusicSearchPlayerPro
     });
   };
   
-  useEffect(() => {
-    if(hasYtSearched && ytResults.length === 0 && !isYtLoading && !isLoadMoreLoading) {
-        setCurrentPlayingYoutubeTrack(null);
-    }
-  }, [ytResults, hasYtSearched, isYtLoading, isLoadMoreLoading])
-
-  const tracksToDisplay = hasYtSearched ? ytResults : predefinedInitialTracks;
-  const displayTitle = hasYtSearched 
-    ? (currentSearchQuery && ytResults.length > 0 ? `Results for "${currentSearchQuery}"` : "") 
-    : "Discover Music";
+  const displayTitle = currentSearchQuery === DEFAULT_DISCOVER_QUERY && hasLoadedInitialDiscover
+    ? "Discover Music" 
+    : (ytResults.length > 0 ? `Results for "${currentSearchQuery}"` : "");
 
   return (
     <div className="space-y-6">
@@ -138,8 +149,8 @@ export default function YouTubeMusicSearchPlayer({}: YouTubeMusicSearchPlayerPro
               onChange={(e) => setYtSearchTerm(e.target.value)}
               className="flex-grow"
             />
-            <Button type="submit" disabled={isYtLoading} variant="default">
-              {isYtLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <SearchIcon className="h-4 w-4" />}
+            <Button type="submit" disabled={isLoading && ytSearchTerm.trim() !== ""} variant="default">
+              {(isLoading && ytSearchTerm.trim() !== "") ? <Loader2 className="h-4 w-4 animate-spin" /> : <SearchIcon className="h-4 w-4" />}
               <span className="ml-2 hidden sm:inline">Search</span>
             </Button>
           </form>
@@ -174,30 +185,30 @@ export default function YouTubeMusicSearchPlayer({}: YouTubeMusicSearchPlayerPro
         </Card>
       )}
 
-      {(isYtLoading && !isLoadMoreLoading) && (
+      {(isLoading && ytResults.length === 0) && (
         <div className="text-center py-8">
           <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
-          <p className="mt-2 text-muted-foreground">Searching YouTube Music...</p>
+          <p className="mt-2 text-muted-foreground">Loading YouTube Music...</p>
         </div>
       )}
 
-      {!isYtLoading && hasYtSearched && ytResults.length === 0 && !isLoadMoreLoading && !currentPlayingYoutubeTrack && (
+      {!isLoading && ytResults.length === 0 && hasLoadedInitialDiscover && (
         <div className="text-center py-8 border-2 border-dashed border-muted-foreground/30 rounded-lg">
           <Music className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <p className="text-xl font-semibold text-muted-foreground">No YouTube Music results</p>
           <p className="text-sm text-muted-foreground">
-            {currentSearchQuery ? `No results for "${currentSearchQuery}". Check your search or API configuration.` : "No results found."}
+            {currentSearchQuery !== DEFAULT_DISCOVER_QUERY ? `No results for "${currentSearchQuery}". Check your search or API configuration.` : "Could not load discover tracks."}
           </p>
         </div>
       )}
 
-      {tracksToDisplay.length > 0 && (
+      {ytResults.length > 0 && (
         <div className="space-y-4">
           {displayTitle && <h3 className="text-lg font-semibold">{displayTitle}</h3>}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {tracksToDisplay.map((track) => (
+            {ytResults.map((track) => (
               <SongCard
-                key={track.videoId + (Math.random().toString())} // Ensure unique key if IDs might repeat across pages
+                key={track.videoId + track.title + (Math.random().toString())} 
                 title={track.title}
                 artist={track.artist}
                 albumArtUrl={track.thumbnailUrl || `https://placehold.co/300x300.png?text=${encodeURIComponent(track.title.substring(0,10))}`}
@@ -212,34 +223,18 @@ export default function YouTubeMusicSearchPlayer({}: YouTubeMusicSearchPlayerPro
               />
             ))}
           </div>
-          {nextPageToken && !isYtLoading && (
-            <div className="flex justify-center mt-6">
-              <Button onClick={handleLoadMore} disabled={isLoadMoreLoading} variant="outline" size="lg">
-                {isLoadMoreLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                    Loading More...
-                  </>
-                ) : (
-                  <>
-                    <PlusCircle className="mr-2 h-5 w-5" />
-                    Load More Results
-                  </>
-                )}
-              </Button>
-            </div>
-          )}
+          <div ref={loadMoreRef} className="h-10 flex items-center justify-center">
+            {isLoadMoreLoading && <Loader2 className="h-6 w-6 animate-spin text-primary" />}
+          </div>
         </div>
       )}
       
-      {!isYtLoading && !hasYtSearched && tracksToDisplay.length === 0 && !currentPlayingYoutubeTrack && (
+      {!isLoading && !hasLoadedInitialDiscover && ytResults.length === 0 && (
          <div className="text-center py-8 border-2 border-dashed border-muted-foreground/30 rounded-lg">
             <Youtube className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-xl font-semibold text-muted-foreground">Search for tracks on YouTube Music</p>
-            <p className="text-sm text-muted-foreground">Enter a song or artist above to begin, or explore suggested tracks.</p>
+            <p className="text-xl font-semibold text-muted-foreground">Initializing Music Discovery...</p>
         </div>
       )}
     </div>
   );
 }
-
