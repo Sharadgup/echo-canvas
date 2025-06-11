@@ -1,14 +1,14 @@
 
 "use server";
 
-import type { SongCardProps } from "@/components/playlist/SongCard"; // Assuming SongCardProps is exported or create a similar type
+// Assuming SongCardProps is exported or create a similar type
 
 export interface YouTubeMusicSearchResult {
-  id: string;
+  videoId: string; // Essential for embedding
   title: string;
   artist: string;
   thumbnailUrl?: string;
-  youtubeVideoUrl: string; // URL to the YouTube video/music
+  youtubeVideoUrl: string; // URL to the YouTube video/music (full watch URL)
 }
 
 interface YoutubeMusicApiItem {
@@ -33,14 +33,15 @@ export async function searchYoutubeMusicAction(searchTerm: string): Promise<YouT
   if (!apiKey || !apiHost || apiHost === "YOUR_RAPIDAPI_HOST_HERE") {
     console.warn("RapidAPI Key or Host is not configured. Returning mock data for YouTube Music search.");
     // Return mock data if API details are not fully configured
+    // Ensure mock data includes videoId
     return [
-      { id: "mockYtId1", title: "Mock YouTube Song 1", artist: "Mock Artist YT", thumbnailUrl: `https://placehold.co/300x300.png?text=YT+Song+1`, youtubeVideoUrl: `https://www.youtube.com/results?search_query=${encodeURIComponent(searchTerm + " Mock YouTube Song 1")}` },
-      { id: "mockYtId2", title: "Mock YouTube Song 2", artist: "Another Mock Artist YT", thumbnailUrl: `https://placehold.co/300x300.png?text=YT+Song+2`, youtubeVideoUrl: `https://www.youtube.com/results?search_query=${encodeURIComponent(searchTerm + " Mock YouTube Song 2")}` },
+      { videoId: "dQw4w9WgXcQ", title: "Never Gonna Give You Up (Mock)", artist: "Rick Astley (Mock YT)", thumbnailUrl: `https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg`, youtubeVideoUrl: `https://www.youtube.com/watch?v=dQw4w9WgXcQ` },
+      { videoId: "kJQP7kiw5Fk", title: "Bohemian Rhapsody (Mock)", artist: "Queen (Mock YT)", thumbnailUrl: `https://i.ytimg.com/vi/kJQP7kiw5Fk/mqdefault.jpg`, youtubeVideoUrl: `https://www.youtube.com/watch?v=kJQP7kiw5Fk` },
     ];
   }
 
-  // IMPORTANT: Replace with the actual API endpoint and query parameters
-  const endpoint = `/search?query=${encodeURIComponent(searchTerm)}`; // Example endpoint
+  // IMPORTANT: Replace with the actual API endpoint and query parameters if different
+  const endpoint = `/search?query=${encodeURIComponent(searchTerm)}`; 
   const url = `https://${apiHost}${endpoint}`;
 
   try {
@@ -64,13 +65,14 @@ export async function searchYoutubeMusicAction(searchTerm: string): Promise<YouT
     // This is a common structure for YouTube search APIs but might differ.
     if (data && data.items && Array.isArray(data.items)) {
       return data.items.map((item: YoutubeMusicApiItem) => ({
-        id: item.id?.videoId || String(Math.random()), // Ensure an ID exists
+        videoId: item.id?.videoId || String(Math.random().toString(36).substring(7)), // Ensure a videoId exists
         title: item.snippet?.title || "Unknown Title",
         artist: item.snippet?.channelTitle || "Unknown Artist",
         thumbnailUrl: item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url,
         youtubeVideoUrl: `https://www.youtube.com/watch?v=${item.id?.videoId}`,
       })).slice(0, 10); // Limit results for now
     }
+    console.warn("YouTube Music API response format unexpected, returning empty array. Data:", data);
     return []; // Return empty if data format is unexpected
   } catch (error) {
     console.error("Error calling YouTube Music API:", error);

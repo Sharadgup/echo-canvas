@@ -5,11 +5,10 @@ import { useState, FormEvent } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Search as SearchIcon, Loader2, Music, Youtube, ExternalLink } from "lucide-react"; // Added Youtube
+import { Search as SearchIcon, Loader2, Music, Youtube, Play, X } from "lucide-react"; 
 import SongCard from "@/components/playlist/SongCard";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 // Local mock search result type
 interface MockSearchResult {
@@ -35,6 +34,8 @@ export default function SearchClient() {
   const [ytResults, setYtResults] = useState<YouTubeMusicSearchResult[]>([]);
   const [isYtLoading, setIsYtLoading] = useState(false);
   const [hasYtSearched, setHasYtSearched] = useState(false);
+  const [currentPlayingYoutubeTrack, setCurrentPlayingYoutubeTrack] = useState<YouTubeMusicSearchResult | null>(null);
+
 
   const { toast } = useToast();
 
@@ -70,6 +71,7 @@ export default function SearchClient() {
     setIsYtLoading(true);
     setHasYtSearched(true);
     setYtResults([]);
+    setCurrentPlayingYoutubeTrack(null); // Clear any currently playing track
 
     try {
       const results = await searchYoutubeMusicAction(ytSearchTerm);
@@ -171,7 +173,7 @@ export default function SearchClient() {
             Search YouTube Music
           </CardTitle>
           <CardDescription>
-            Find tracks on YouTube Music. (Requires API configuration from your side in <code>.env</code> and <code>youtubeMusicActions.ts</code>)
+            Find tracks on YouTube Music. (Requires API configuration from your side in <code>.env</code> and relevant action file)
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -189,6 +191,34 @@ export default function SearchClient() {
             </Button>
           </form>
 
+          {currentPlayingYoutubeTrack && (
+            <Card className="my-6 shadow-lg border-primary">
+              <CardHeader>
+                <CardTitle className="flex justify-between items-center text-lg font-headline">
+                  <span>Now Playing: {currentPlayingYoutubeTrack.title}</span>
+                  <Button variant="ghost" size="icon" onClick={() => setCurrentPlayingYoutubeTrack(null)} aria-label="Close player">
+                    <X className="h-5 w-5" />
+                  </Button>
+                </CardTitle>
+                <CardDescription>{currentPlayingYoutubeTrack.artist}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="aspect-video bg-muted rounded-md overflow-hidden">
+                  <iframe
+                    width="100%"
+                    height="100%"
+                    src={`https://www.youtube.com/embed/${currentPlayingYoutubeTrack.videoId}?autoplay=1`}
+                    title="YouTube video player"
+                    frameBorder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                    className="rounded-md"
+                  ></iframe>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {isYtLoading && (
             <div className="text-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
@@ -196,7 +226,7 @@ export default function SearchClient() {
             </div>
           )}
 
-          {!isYtLoading && hasYtSearched && ytResults.length === 0 && (
+          {!isYtLoading && hasYtSearched && ytResults.length === 0 && !currentPlayingYoutubeTrack && (
             <div className="text-center py-8 border-2 border-dashed border-muted-foreground/30 rounded-lg">
               <Youtube className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-xl font-semibold text-muted-foreground">No YouTube Music results</p>
@@ -214,20 +244,21 @@ export default function SearchClient() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {ytResults.map((track) => (
                   <SongCard
-                    key={track.id}
+                    key={track.videoId}
                     title={track.title}
                     artist={track.artist}
                     albumArtUrl={track.thumbnailUrl || `https://placehold.co/300x300.png?text=${encodeURIComponent(track.title.substring(0,10))}`}
                     data-ai-hint="youtube music thumbnail"
-                    onPlay={() => window.open(track.youtubeVideoUrl, "_blank")}
-                    playButtonText="Play on YouTube"
-                    playButtonIcon={ExternalLink}
+                    onPlay={() => setCurrentPlayingYoutubeTrack(track)}
+                    playButtonText="Play in App"
+                    playButtonIcon={Play}
+                    isActive={currentPlayingYoutubeTrack?.videoId === track.videoId}
                   />
                 ))}
               </div>
             </div>
           )}
-          {!isYtLoading && !hasYtSearched && (
+          {!isYtLoading && !hasYtSearched && !currentPlayingYoutubeTrack && (
              <div className="text-center py-8 border-2 border-dashed border-muted-foreground/30 rounded-lg my-6">
                 <Youtube className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <p className="text-xl font-semibold text-muted-foreground">Search for tracks on YouTube Music</p>
