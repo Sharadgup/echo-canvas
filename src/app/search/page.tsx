@@ -1,12 +1,17 @@
+
 "use client";
-import SearchClient from "@/components/search/SearchClient";
+import SearchClient from "@/components/search/SearchClient"; // For Mock Search
+import YouTubeMusicSearchPlayer from "@/components/youtube/YouTubeMusicSearchPlayer"; // New component
 import { useAuthContext } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Music } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { Separator } from "@/components/ui/separator";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+
 
 export default function SearchPage() {
   const { user, loading } = useAuthContext();
@@ -43,8 +48,24 @@ export default function SearchPage() {
     );
   }
   return (
-    <div className="py-8">
-      <SearchClient />
+    <div className="py-8 space-y-12">
+      <Card className="w-full max-w-4xl mx-auto shadow-xl">
+        <CardHeader className="text-center">
+            <Music className="mx-auto h-12 w-12 text-primary mb-3" />
+            <CardTitle className="text-3xl font-headline">Find Your Music</CardTitle>
+            <CardDescription>
+                Search for songs using our internal mock search or explore YouTube Music.
+            </CardDescription>
+        </CardHeader>
+      </Card>
+      
+      {/* YouTube Music Search and Player */}
+      <YouTubeMusicSearchPlayer />
+
+      <Separator className="my-12" />
+
+      {/* Mock Search Section - Kept from original SearchClient */}
+      <SearchClient /> 
     </div>
   );
 }
