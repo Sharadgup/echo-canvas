@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Search as SearchIcon, Loader2, Music, Disc3, ListPlus, ExternalLink } from "lucide-react";
-import SongCard from "@/components/playlist/SongCard"; 
+import SongCard from "@/components/playlist/SongCard";
 import { getMyTopTracksAction, createPlaylistWithTracksAction } from "@/app/actions/spotifyActions";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -19,6 +19,7 @@ interface SearchResult {
   type: "song" | "artist";
   albumArtUrl?: string;
   uri?: string; // Spotify track URI
+  spotifyUrl?: string; // External URL to song on Spotify
 }
 
 interface SpotifyTrackItem {
@@ -27,6 +28,7 @@ interface SpotifyTrackItem {
   artists: { name: string }[];
   album?: { images: { url: string }[] };
   uri: string;
+  external_urls?: { spotify: string; };
 }
 
 export default function SearchClient() {
@@ -51,11 +53,11 @@ export default function SearchClient() {
 
     setIsLoading(true);
     setHasSearched(true);
-    setSpotifyTopTracks([]); 
+    setSpotifyTopTracks([]);
     setCreatedPlaylistId(null);
 
     await new Promise(resolve => setTimeout(resolve, 1000));
-    
+
     const mockResults: SearchResult[] = searchTerm.toLowerCase().includes("love") ? [
       { id: "1", title: "Love Story", artist: "Taylor Swift", type: "song" },
       { id: "2", title: "Crazy in Love", artist: "Beyoncé", type: "song" },
@@ -64,7 +66,7 @@ export default function SearchClient() {
       { id: "4", title: "Rock Anthems (Artist)", artist: "Various Artists", type: "artist" },
       { id: "5", title: "Bohemian Rhapsody", artist: "Queen", type: "song" },
     ] : [];
-    
+
     setResults(mockResults);
     setIsLoading(false);
   };
@@ -79,8 +81,8 @@ export default function SearchClient() {
       return;
     }
     setIsFetchingSpotify(true);
-    setResults([]); 
-    setCreatedPlaylistId(null); 
+    setResults([]);
+    setCreatedPlaylistId(null);
     try {
       const topTracksData = await getMyTopTracksAction(spotifyToken);
       if (topTracksData && topTracksData.error) {
@@ -98,6 +100,7 @@ export default function SearchClient() {
           type: "song" as "song" | "artist",
           albumArtUrl: track.album?.images?.[0]?.url || `https://placehold.co/300x300.png?text=${encodeURIComponent(track.name.substring(0,10))}`,
           uri: track.uri,
+          spotifyUrl: track.external_urls?.spotify,
         }));
         setSpotifyTopTracks(formattedTracks);
         toast({
@@ -122,7 +125,7 @@ export default function SearchClient() {
       setSpotifyTopTracks([]);
     } finally {
       setIsFetchingSpotify(false);
-      setHasSearched(true); 
+      setHasSearched(true);
     }
   };
 
@@ -203,7 +206,7 @@ export default function SearchClient() {
         </form>
 
         <Separator className="my-6" />
-        
+
         <div>
           <h3 className="text-lg font-semibold mb-2 text-center">Your Spotify Integration</h3>
            <Alert variant="default" className="mb-4 bg-accent/10 border-accent/30">
@@ -230,9 +233,9 @@ export default function SearchClient() {
             </Button>
           </div>
           {spotifyTopTracks.length > 0 && (
-            <Button 
-                onClick={handleCreateSpotifyPlaylist} 
-                disabled={currentLoadingState || !spotifyToken || spotifyTopTracks.length === 0} 
+            <Button
+                onClick={handleCreateSpotifyPlaylist}
+                disabled={currentLoadingState || !spotifyToken || spotifyTopTracks.length === 0}
                 className="w-full mt-2"
                 variant="secondary"
             >
@@ -268,12 +271,15 @@ export default function SearchClient() {
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {currentDisplayResults.map((result) => (
-              <SongCard 
-                key={result.id} 
-                title={result.title} 
+              <SongCard
+                key={result.id}
+                title={result.title}
                 artist={result.artist}
                 albumArtUrl={result.albumArtUrl || `https://placehold.co/300x300.png?text=${encodeURIComponent(result.title.substring(0,10))}`}
                 data-ai-hint="music album"
+                onPlay={result.spotifyUrl ? () => window.open(result.spotifyUrl, '_blank', 'noopener,noreferrer') : undefined}
+                playButtonText={result.spotifyUrl ? "Open on Spotify" : undefined}
+                playButtonIcon={result.spotifyUrl ? ExternalLink : undefined}
               />
             ))}
             </div>
@@ -303,7 +309,7 @@ export default function SearchClient() {
             </div>
           </div>
         )}
-         
+
          {!currentLoadingState && !hasSearched && !createdPlaylistId && (
           <div className="text-center py-8 border-2 border-dashed border-muted-foreground/30 rounded-lg">
             <Music className="h-12 w-12 text-muted-foreground mx-auto mb-4" />

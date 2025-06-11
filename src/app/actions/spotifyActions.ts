@@ -7,7 +7,8 @@ interface SpotifyTrackItem {
   name: string;
   artists: { name: string }[];
   album?: { images: { url: string }[] };
-  uri: string; // Added track URI
+  uri: string;
+  external_urls?: { spotify: string; }; // Added external Spotify URL
 }
 
 interface SpotifyTopTracksResponse {
@@ -59,11 +60,11 @@ async function fetchWebApi(
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({ message: `HTTP error! status: ${res.status}` }));
       console.error('Spotify API Error:', errorData);
-      const errorPayload: SpotifyErrorResponse = { 
-        error: { 
-            status: res.status, 
+      const errorPayload: SpotifyErrorResponse = {
+        error: {
+            status: res.status,
             message: errorData?.error?.message || errorData.message || `Spotify API request failed with status ${res.status}`
-        } 
+        }
       };
       return errorPayload;
     }
@@ -85,9 +86,17 @@ export async function getMyTopTracksAction(token: string): Promise<SpotifyTopTra
     'GET',
     token
   );
-  
+
   if (response && response.error) {
     return response as SpotifyErrorResponse;
+  }
+
+  // Ensure items have external_urls populated if available from Spotify
+  if (response && response.items) {
+    response.items = response.items.map((item: any) => ({
+      ...item,
+      external_urls: item.external_urls || { spotify: '#' } // Provide a fallback if missing
+    }));
   }
 
   return response as SpotifyTopTracksResponse;
@@ -141,16 +150,16 @@ export async function createPlaylistWithTracksAction(
     token,
     addTracksPayload
   );
-  
+
   if (addTracksResponse && (addTracksResponse as SpotifyErrorResponse).error) {
     // Even if adding tracks fails, the playlist was created. We could choose to return the playlist
     // and an error message about tracks, or just the error. For now, prioritize the error.
     console.warn(`Playlist ${newPlaylist.id} created, but failed to add tracks:`, (addTracksResponse as SpotifyErrorResponse).error.message);
-    return { 
-      error: { 
-        status: (addTracksResponse as SpotifyErrorResponse).error.status, 
-        message: `Playlist '${newPlaylist.name}' created, but failed to add tracks: ${(addTracksResponse as SpotifyErrorResponse).error.message}` 
-      } 
+    return {
+      error: {
+        status: (addTracksResponse as SpotifyErrorResponse).error.status,
+        message: `Playlist '${newPlaylist.name}' created, but failed to add tracks: ${(addTracksResponse as SpotifyErrorResponse).error.message}`
+      }
     };
   }
 

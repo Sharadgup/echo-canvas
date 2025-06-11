@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -8,7 +9,7 @@ import SongSuggesterClient from "@/components/playlist/SongSuggesterClient";
 import type { SuggestNextSongOutput } from "@/ai/flows/suggest-next-song";
 import { useAuthContext } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Loader2, PlayCircle } from "lucide-react"; // Import PlayCircle
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -17,7 +18,7 @@ export default function PlaylistPage() {
   const [playlist, setPlaylist] = useState<string[]>([]);
   const [currentSong, setCurrentSong] = useState<string | null>(null);
   const [listeningHistory, setListeningHistory] = useState<string[]>([]);
-  
+
   const { user, loading } = useAuthContext();
   const router = useRouter();
 
@@ -44,7 +45,7 @@ export default function PlaylistPage() {
       setListeningHistory(prev => [...prev, songTitle]);
     }
   };
-  
+
   const handleSongSuggested = (suggestion: SuggestNextSongOutput) => {
     // Optionally, add suggested song to playlist or offer to play next
     // For now, it's just displayed by SongSuggesterClient
@@ -92,19 +93,21 @@ export default function PlaylistPage() {
           <h2 className="text-3xl font-bold mb-6 font-headline text-center">Your Generated Playlist</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {playlist.map((songTitle, index) => (
-              <SongCard 
-                key={`${songTitle}-${index}`} 
-                title={songTitle} 
-                onPlay={handleSetCurrentSong}
+              <SongCard
+                key={`${songTitle}-${index}`}
+                title={songTitle}
+                onPlay={() => handleSetCurrentSong(songTitle)}
                 isActive={currentSong === songTitle}
                 albumArtUrl={`https://placehold.co/300x300.png?text=${encodeURIComponent(songTitle.substring(0,10))}`}
                 data-ai-hint="music album"
+                playButtonText={currentSong === songTitle ? "Playing" : "Set as Current"}
+                playButtonIcon={PlayCircle} // Default icon
               />
             ))}
           </div>
         </div>
       )}
-      
+
       {playlist.length === 0 && !currentSong && (
          <div className="text-center py-10">
             <p className="text-muted-foreground text-lg">Your playlist will appear here once generated.</p>
@@ -113,8 +116,8 @@ export default function PlaylistPage() {
       )}
 
       <div>
-        <SongSuggesterClient 
-          listeningHistory={listeningHistory} 
+        <SongSuggesterClient
+          listeningHistory={listeningHistory}
           currentSong={currentSong}
           onSongSuggested={handleSongSuggested}
         />
