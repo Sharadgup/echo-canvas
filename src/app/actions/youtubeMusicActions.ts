@@ -70,6 +70,7 @@ export async function searchYoutubeMusicAction(searchTerm: string): Promise<YouT
     q: searchTerm,
     type: "video",
     videoCategoryId: "10", // Category ID for "Music"
+    topicId: "/m/04rlf", // Freebase Topic ID for Music, to further refine results
     key: apiKey,
     maxResults: "10",
   });
@@ -110,3 +111,4 @@ export async function searchYoutubeMusicAction(searchTerm: string): Promise<YouT
     return []; // Return empty array on error, or re-throw as needed
   }
 }
+
