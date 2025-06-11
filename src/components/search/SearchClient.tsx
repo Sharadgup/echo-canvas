@@ -5,21 +5,30 @@ import { useState, FormEvent } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Search as SearchIcon, Loader2, Music, Disc3, ListPlus, ExternalLink } from "lucide-react";
+import { Search as SearchIcon, Loader2, Music, Disc3, ListPlus, ExternalLink, Play } from "lucide-react";
 import SongCard from "@/components/playlist/SongCard";
 import { getMyTopTracksAction, createPlaylistWithTracksAction } from "@/app/actions/spotifyActions";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger, // Not used directly here for programmatic open
+  DialogClose,
+} from "@/components/ui/dialog";
 
 interface SearchResult {
-  id: string;
+  id: string; // Spotify Track ID
   title: string;
   artist: string;
   type: "song" | "artist";
   albumArtUrl?: string;
-  uri?: string; // Spotify track URI
-  spotifyUrl?: string; // External URL to song on Spotify
+  uri?: string; // Full Spotify track URI
+  spotifyUrl?: string; // External URL to song on Spotify web
 }
 
 interface SpotifyTrackItem {
@@ -45,6 +54,10 @@ export default function SearchClient() {
   const [createdPlaylistName, setCreatedPlaylistName] = useState<string | null>(null);
   const [createdPlaylistUrl, setCreatedPlaylistUrl] = useState<string | null>(null);
 
+  const [selectedTrackForEmbed, setSelectedTrackForEmbed] = useState<SearchResult | null>(null);
+  const [isEmbedDialogOpen, setIsEmbedDialogOpen] = useState(false);
+
+
   const { toast } = useToast();
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -55,6 +68,8 @@ export default function SearchClient() {
     setHasSearched(true);
     setSpotifyTopTracks([]);
     setCreatedPlaylistId(null);
+    setSelectedTrackForEmbed(null);
+    setIsEmbedDialogOpen(false);
 
     await new Promise(resolve => setTimeout(resolve, 1000));
 
@@ -83,6 +98,8 @@ export default function SearchClient() {
     setIsFetchingSpotify(true);
     setResults([]);
     setCreatedPlaylistId(null);
+    setSelectedTrackForEmbed(null);
+    setIsEmbedDialogOpen(false);
     try {
       const topTracksData = await getMyTopTracksAction(spotifyToken);
       if (topTracksData && topTracksData.error) {
@@ -140,6 +157,8 @@ export default function SearchClient() {
     }
     setIsCreatingPlaylist(true);
     setCreatedPlaylistId(null);
+    setSelectedTrackForEmbed(null);
+    setIsEmbedDialogOpen(false);
     try {
       const trackUris = spotifyTopTracks.map(track => track.uri).filter(uri => !!uri) as string[];
       if (trackUris.length === 0) {
@@ -177,6 +196,10 @@ export default function SearchClient() {
     }
   };
 
+  const handlePlayInApp = (track: SearchResult) => {
+    setSelectedTrackForEmbed(track);
+    setIsEmbedDialogOpen(true);
+  };
 
   const currentDisplayResults = spotifyTopTracks.length > 0 ? spotifyTopTracks : results;
   const currentLoadingState = isFetchingSpotify || isLoading || isCreatingPlaylist;
@@ -247,14 +270,14 @@ export default function SearchClient() {
 
         <Separator className="my-8" />
 
-        {currentLoadingState && !createdPlaylistId && (
+        {currentLoadingState && !createdPlaylistId && !isEmbedDialogOpen && (
           <div className="text-center py-8">
             <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
             <p className="mt-2 text-muted-foreground">Processing your request...</p>
           </div>
         )}
 
-        {!currentLoadingState && hasSearched && currentDisplayResults.length === 0 && !createdPlaylistId && (
+        {!currentLoadingState && hasSearched && currentDisplayResults.length === 0 && !createdPlaylistId && !isEmbedDialogOpen && (
           <div className="text-center py-8 border-2 border-dashed border-muted-foreground/30 rounded-lg">
             <Music className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <p className="text-xl font-semibold text-muted-foreground">No results found</p>
@@ -264,7 +287,7 @@ export default function SearchClient() {
           </div>
         )}
 
-        {!currentLoadingState && currentDisplayResults.length > 0 && !createdPlaylistId && (
+        {!currentLoadingState && currentDisplayResults.length > 0 && !createdPlaylistId && !isEmbedDialogOpen && (
           <div className="space-y-4">
             <h3 className="text-xl font-semibold mb-2">
               {spotifyTopTracks.length > 0 ? "Your Spotify Top Tracks" : `Search Results for "${searchTerm}"`}
@@ -277,16 +300,16 @@ export default function SearchClient() {
                 artist={result.artist}
                 albumArtUrl={result.albumArtUrl || `https://placehold.co/300x300.png?text=${encodeURIComponent(result.title.substring(0,10))}`}
                 data-ai-hint="music album"
-                onPlay={result.spotifyUrl ? () => window.open(result.spotifyUrl, '_blank', 'noopener,noreferrer') : undefined}
-                playButtonText={result.spotifyUrl ? "Open on Spotify" : undefined}
-                playButtonIcon={result.spotifyUrl ? ExternalLink : undefined}
+                onPlay={() => handlePlayInApp(result)}
+                playButtonText="Play in App"
+                playButtonIcon={Play}
               />
             ))}
             </div>
           </div>
         )}
 
-        {createdPlaylistId && (
+        {createdPlaylistId && !isEmbedDialogOpen && (
           <div className="mt-8 space-y-4">
             <h3 className="text-2xl font-bold text-center text-primary">Playlist Created: {createdPlaylistName}</h3>
             {createdPlaylistUrl && (
@@ -310,14 +333,46 @@ export default function SearchClient() {
           </div>
         )}
 
-         {!currentLoadingState && !hasSearched && !createdPlaylistId && (
+         {!currentLoadingState && !hasSearched && !createdPlaylistId && !isEmbedDialogOpen && (
           <div className="text-center py-8 border-2 border-dashed border-muted-foreground/30 rounded-lg">
             <Music className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <p className="text-xl font-semibold text-muted-foreground">Start by searching or connecting to Spotify</p>
             <p className="text-sm text-muted-foreground">Discover songs, artists, and manage your playlists.</p>
           </div>
         )}
+
+        {selectedTrackForEmbed && (
+          <Dialog open={isEmbedDialogOpen} onOpenChange={setIsEmbedDialogOpen}>
+            <DialogContent className="sm:max-w-[425px] md:max-w-md lg:max-w-lg w-full p-0"> {/* Adjusted width and removed padding for iframe */}
+              <DialogHeader className="p-4 border-b">
+                <DialogTitle>Playing: {selectedTrackForEmbed.title}</DialogTitle>
+                <DialogDescription>{selectedTrackForEmbed.artist}</DialogDescription>
+              </DialogHeader>
+              <div className="aspect-auto h-[100px] md:h-[120px]"> {/* Height of Spotify compact player */}
+                 <iframe
+                    title={`Spotify Embed: ${selectedTrackForEmbed.title}`}
+                    src={`https://open.spotify.com/embed/track/${selectedTrackForEmbed.id}?utm_source=generator&theme=0`}
+                    width="100%"
+                    height="100%"
+                    style={{ border: 'none' }}
+                    allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                    loading="lazy"
+                  />
+              </div>
+               {/* <DialogFooter className="p-4 border-t">
+                <DialogClose asChild>
+                  <Button type="button" variant="outline">
+                    Close
+                  </Button>
+                </DialogClose>
+              </DialogFooter> */}
+            </DialogContent>
+          </Dialog>
+        )}
       </CardContent>
     </Card>
   );
 }
+
+
+    
