@@ -1,45 +1,77 @@
+
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# dependencies
+# Dependencies
 /node_modules
 /.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
+.pnp.js
 
-# testing
+# Testing
 /coverage
 
-# next.js
+# Next.js
 /.next/
 /out/
 
-# production
+# Production
 /build
 
-# misc
+# Misc
 .DS_Store
 *.pem
 
-# debug
+# Log files
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.pnpm-debug.log*
+pnpm-debug.log*
 
-# vercel
-.vercel
+# Editor directories and files
+.vscode/*
+!.vscode/settings.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-
-.genkit/*
+# Environment Variables
+# Ignore all .env files by default
 .env*
+# But DO include .env.example
+!.env.example
+# And DO NOT include .env.docker if it contains actual secrets.
+# If .env.docker is meant to be a template with placeholders, then it could be !.env.docker
+# For this project, .env.docker was populated with actual keys, so it should be ignored.
 
-# firebase
-firebase-debug.log
-firestore-debug.log
+# Debug log files
+debug.log
+npm-debug.log
+
+# Local user settings
+.user.ini
+
+# Optional eslint cache
+.eslintcache
+
+# Optional Prettier cache
+.prettiercache
+
+# Optional SvelteKit cache
+.svelte-kit
+
+# Optional Gatsby cache
+.cache/
+
+# Optional Mac OS files
+.AppleDouble
+.LSOverride
+
+# Optional Windows files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Optional PNPM files
+pnpm-lock.yaml
