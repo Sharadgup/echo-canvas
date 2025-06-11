@@ -5,10 +5,10 @@ import { useState, FormEvent, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Search as SearchIcon, Loader2, Youtube, Play, X, Music, Heart } from "lucide-react";
+import { Search as SearchIcon, Loader2, Youtube, Play, X, Music, Heart, PlusCircle } from "lucide-react";
 import SongCard from "@/components/playlist/SongCard";
 import { useToast } from "@/hooks/use-toast";
-import type { YouTubeMusicSearchResult } from "@/app/actions/youtubeMusicActions";
+import type { YouTubeMusicSearchResult, YouTubeMusicSearchResponse } from "@/app/actions/youtubeMusicActions";
 import { searchYoutubeMusicAction } from "@/app/actions/youtubeMusicActions";
 
 interface YouTubeMusicSearchPlayerProps {
@@ -24,38 +24,73 @@ const predefinedInitialTracks: YouTubeMusicSearchResult[] = [
 
 export default function YouTubeMusicSearchPlayer({}: YouTubeMusicSearchPlayerProps) {
   const [ytSearchTerm, setYtSearchTerm] = useState("");
+  const [currentSearchQuery, setCurrentSearchQuery] = useState(""); // To store the term used for "Load More"
   const [ytResults, setYtResults] = useState<YouTubeMusicSearchResult[]>([]);
   const [isYtLoading, setIsYtLoading] = useState(false);
+  const [isLoadMoreLoading, setIsLoadMoreLoading] = useState(false);
   const [hasYtSearched, setHasYtSearched] = useState(false);
   const [currentPlayingYoutubeTrack, setCurrentPlayingYoutubeTrack] = useState<YouTubeMusicSearchResult | null>(null);
-  const [likedTracks, setLikedTracks] = useState<Set<string>>(new Set()); // Stores videoIds of liked tracks
+  const [likedTracks, setLikedTracks] = useState<Set<string>>(new Set());
+  const [nextPageToken, setNextPageToken] = useState<string | undefined>(undefined);
 
   const { toast } = useToast();
 
-  const handleYoutubeMusicSearch = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!ytSearchTerm.trim()) return;
-
-    setIsYtLoading(true);
+  const fetchMusic = async (term: string, pageToken?: string) => {
+    if (pageToken) {
+      setIsLoadMoreLoading(true);
+    } else {
+      setIsYtLoading(true);
+      setYtResults([]); // Clear previous results for a new search
+      setCurrentPlayingYoutubeTrack(null);
+    }
     setHasYtSearched(true);
-    setYtResults([]);
-    // setCurrentPlayingYoutubeTrack(null); // Keep player open if user searches again
+    setCurrentSearchQuery(term);
+
 
     try {
-      const results = await searchYoutubeMusicAction(ytSearchTerm);
-      setYtResults(results);
-      if (results.length > 0) {
-        toast({ title: "YouTube Music Search Complete", description: `Found ${results.length} tracks.` });
+      const response: YouTubeMusicSearchResponse = await searchYoutubeMusicAction(term, pageToken);
+      if (pageToken) {
+        setYtResults(prevResults => [...prevResults, ...response.results]);
       } else {
-        toast({ title: "YouTube Music Search Complete", description: "No tracks found. Ensure API is configured in .env and youtubeMusicActions.ts if using a live API." });
+        setYtResults(response.results);
       }
+      setNextPageToken(response.nextPageToken);
+
+      if (!pageToken && response.results.length > 0) {
+        toast({ title: "YouTube Music Search Complete", description: `Found ${response.results.length} tracks.` });
+      } else if (!pageToken) {
+         toast({ title: "YouTube Music Search Complete", description: "No tracks found for your query." });
+      }
+      if (pageToken && response.results.length === 0) {
+        toast({ title: "No More Results", description: "No more tracks to load for this query." });
+      }
+
     } catch (error: any) {
       console.error("YouTube Music search error:", error);
       toast({ title: "YouTube Music Search Failed", description: error.message || "Could not fetch YouTube Music tracks.", variant: "destructive" });
     } finally {
-      setIsYtLoading(false);
+      if (pageToken) {
+        setIsLoadMoreLoading(false);
+      } else {
+        setIsYtLoading(false);
+      }
     }
   };
+  
+  const handleYoutubeMusicSearch = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!ytSearchTerm.trim()) return;
+    fetchMusic(ytSearchTerm);
+  };
+
+  const handleLoadMore = () => {
+    if (!nextPageToken || isLoadMoreLoading) return;
+    // Use currentSearchQuery for "Load More" to ensure consistency with the initial search
+    // If no search was made yet (viewing predefined), use a generic term or the last search term.
+    const termToFetch = currentSearchQuery || "top hits"; 
+    fetchMusic(termToFetch, nextPageToken);
+  };
+
 
   const handleLikeTrack = (track: YouTubeMusicSearchResult) => {
     setLikedTracks(prevLikedTracks => {
@@ -69,18 +104,18 @@ export default function YouTubeMusicSearchPlayer({}: YouTubeMusicSearchPlayerPro
       }
       return newLikedTracks;
     });
-    // Here you would typically call an action to save this to Firebase if persistence is needed
   };
   
-  // Effect to clear player if results are empty and a search has been made
   useEffect(() => {
-    if(hasYtSearched && ytResults.length === 0 && !isYtLoading) {
+    if(hasYtSearched && ytResults.length === 0 && !isYtLoading && !isLoadMoreLoading) {
         setCurrentPlayingYoutubeTrack(null);
     }
-  }, [ytResults, hasYtSearched, isYtLoading])
+  }, [ytResults, hasYtSearched, isYtLoading, isLoadMoreLoading])
 
   const tracksToDisplay = hasYtSearched ? ytResults : predefinedInitialTracks;
-  const displayTitle = hasYtSearched ? (ytResults.length > 0 ? `YouTube Music Results for "${ytSearchTerm}"` : "") : "Discover Music";
+  const displayTitle = hasYtSearched 
+    ? (currentSearchQuery && ytResults.length > 0 ? `Results for "${currentSearchQuery}"` : "") 
+    : "Discover Music";
 
   return (
     <div className="space-y-6">
@@ -91,7 +126,7 @@ export default function YouTubeMusicSearchPlayer({}: YouTubeMusicSearchPlayerPro
             Search YouTube Music
           </CardTitle>
           <CardDescription>
-            Find tracks on YouTube Music to play in the app, or explore some popular choices below.
+            Find tracks on YouTube Music, or explore some popular choices below.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -112,7 +147,7 @@ export default function YouTubeMusicSearchPlayer({}: YouTubeMusicSearchPlayerPro
       </Card>
 
       {currentPlayingYoutubeTrack && (
-        <Card className="shadow-lg border-primary sticky top-20 z-10"> {/* Made player sticky */}
+        <Card className="shadow-lg border-primary sticky top-20 z-10">
           <CardHeader>
             <CardTitle className="flex justify-between items-center text-lg font-headline">
               <span className="truncate">Now Playing: {currentPlayingYoutubeTrack.title}</span>
@@ -139,30 +174,30 @@ export default function YouTubeMusicSearchPlayer({}: YouTubeMusicSearchPlayerPro
         </Card>
       )}
 
-      {isYtLoading && (
+      {(isYtLoading && !isLoadMoreLoading) && (
         <div className="text-center py-8">
           <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
           <p className="mt-2 text-muted-foreground">Searching YouTube Music...</p>
         </div>
       )}
 
-      {!isYtLoading && hasYtSearched && ytResults.length === 0 && !currentPlayingYoutubeTrack && (
+      {!isYtLoading && hasYtSearched && ytResults.length === 0 && !isLoadMoreLoading && !currentPlayingYoutubeTrack && (
         <div className="text-center py-8 border-2 border-dashed border-muted-foreground/30 rounded-lg">
           <Music className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <p className="text-xl font-semibold text-muted-foreground">No YouTube Music results</p>
           <p className="text-sm text-muted-foreground">
-            {ytSearchTerm ? `No results for "${ytSearchTerm}". Check your search or API configuration.` : "No results found."}
+            {currentSearchQuery ? `No results for "${currentSearchQuery}". Check your search or API configuration.` : "No results found."}
           </p>
         </div>
       )}
 
-      {!isYtLoading && tracksToDisplay.length > 0 && (
+      {tracksToDisplay.length > 0 && (
         <div className="space-y-4">
           {displayTitle && <h3 className="text-lg font-semibold">{displayTitle}</h3>}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {tracksToDisplay.map((track) => (
               <SongCard
-                key={track.videoId}
+                key={track.videoId + (Math.random().toString())} // Ensure unique key if IDs might repeat across pages
                 title={track.title}
                 artist={track.artist}
                 albumArtUrl={track.thumbnailUrl || `https://placehold.co/300x300.png?text=${encodeURIComponent(track.title.substring(0,10))}`}
@@ -177,6 +212,23 @@ export default function YouTubeMusicSearchPlayer({}: YouTubeMusicSearchPlayerPro
               />
             ))}
           </div>
+          {nextPageToken && !isYtLoading && (
+            <div className="flex justify-center mt-6">
+              <Button onClick={handleLoadMore} disabled={isLoadMoreLoading} variant="outline" size="lg">
+                {isLoadMoreLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    Loading More...
+                  </>
+                ) : (
+                  <>
+                    <PlusCircle className="mr-2 h-5 w-5" />
+                    Load More Results
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
         </div>
       )}
       
