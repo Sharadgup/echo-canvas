@@ -235,7 +235,7 @@ export default function SearchClient() {
         <Separator className="my-6" />
 
         <div>
-          <h3 className="text-lg font-semibold mb-2 text-center">Your Spotify Integration</h3>
+          <h3 className="text-xl font-semibold mb-4 text-center text-primary">Connect to Spotify & Manage Tracks</h3>
            <Alert variant="default" className="mb-4 bg-accent/10 border-accent/30">
             <Disc3 className="h-4 w-4 !text-accent" />
             <AlertTitle className="text-accent">Spotify Integration (Developer Preview)</AlertTitle>
@@ -370,3 +370,4 @@ export default function SearchClient() {
     </Card>
   );
 }
+
