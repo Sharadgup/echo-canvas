@@ -4,13 +4,14 @@
 import { useState, FormEvent, useEffect, useRef, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"; // CardHeader, CardTitle, CardDescription might not be needed directly if TabsList acts as header
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Search as SearchIcon, Loader2, Youtube, Play, X, Music, Heart } from "lucide-react";
 import SongCard from "@/components/playlist/SongCard";
 import { useToast } from "@/hooks/use-toast";
 import type { YouTubeMusicSearchResult, YouTubeMusicSearchResponse } from "@/app/actions/youtubeMusicActions";
 import { searchYoutubeMusicAction } from "@/app/actions/youtubeMusicActions";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import YouTubeLyricsDisplay from "./YouTubeLyricsDisplay"; // Added import
 
 type CategoryTab = "DISCOVER" | "INDIA" | "USA" | "SEARCH";
 
@@ -23,7 +24,7 @@ export default function YouTubeMusicSearchPlayer() {
   const [activeTab, setActiveTab] = useState<CategoryTab>("DISCOVER");
   
   const [currentApiQuery, setCurrentApiQuery] = useState<string>(DEFAULT_DISCOVER_QUERY_TERM);
-  const [currentApiRegion, setCurrentApiRegion] = useState<string | undefined>("US"); // Default to US for Discover
+  const [currentApiRegion, setCurrentApiRegion] = useState<string | undefined>("US"); 
 
   const [ytResults, setYtResults] = useState<YouTubeMusicSearchResult[]>([]);
   const [resultsTitle, setResultsTitle] = useState<string>("Discover Music");
@@ -45,13 +46,14 @@ export default function YouTubeMusicSearchPlayer() {
       setIsLoading(true);
       setYtResults([]);
       setNextPageToken(undefined);
-      setCurrentPlayingYoutubeTrack(null); // Optionally close player on new search/tab
+      // Keep currentPlayingYoutubeTrack if user is just switching tabs/re-searching same category
+      // setCurrentPlayingYoutubeTrack(null); 
       setHasLoadedInitialDiscoverOrSearched(false);
-    } else if (pageToken) { // Load more
+    } else if (pageToken) { 
       setIsLoadMoreLoading(true);
-    } else { // Initial load for a category or first page of search
+    } else { 
       setIsLoading(true);
-       setHasLoadedInitialDiscoverOrSearched(false);
+      setHasLoadedInitialDiscoverOrSearched(false);
     }
     
     setCurrentApiQuery(query);
@@ -63,26 +65,21 @@ export default function YouTubeMusicSearchPlayer() {
       setYtResults(prevResults => (isNewQuery || !pageToken) ? response.results : [...prevResults, ...response.results]);
       setNextPageToken(response.nextPageToken);
 
-      if (isNewQuery && !pageToken) {
-        if (activeTab !== "SEARCH") { // For category tabs
-             // Toast for category loads can be added if desired
-        } else { // For search tab
-            toast({ title: "YouTube Music Search Complete", description: `Found ${response.results.length} tracks for "${query}".` });
-        }
+      if (isNewQuery && !pageToken && activeTab === "SEARCH" && query) {
+        toast({ title: "YouTube Music Search Complete", description: `Found ${response.results.length} tracks for "${query}".` });
       }
       setHasLoadedInitialDiscoverOrSearched(true);
 
     } catch (error: any) {
       console.error("YouTube Music fetch error:", error);
       toast({ title: "YouTube Music Fetch Failed", description: error.message || "Could not fetch YouTube Music tracks.", variant: "destructive" });
-      setHasLoadedInitialDiscoverOrSearched(true); // Still mark as loaded to show error/empty state
+      setHasLoadedInitialDiscoverOrSearched(true); 
     } finally {
       setIsLoading(false);
       setIsLoadMoreLoading(false);
     }
   }, [toast, activeTab]);
   
-  // Effect for initial load and tab changes
   useEffect(() => {
     let query = DEFAULT_DISCOVER_QUERY_TERM;
     let region: string | undefined = "US";
@@ -97,29 +94,24 @@ export default function YouTubeMusicSearchPlayer() {
       region = "US";
       title = "Top USA Hits";
     } else if (activeTab === "SEARCH") {
-      // For search tab, initial load is handled by search submission or if ytSearchTerm changes.
-      // If ytSearchTerm is empty, we might show a prompt or clear results.
-      // For now, if switching to SEARCH tab and ytSearchTerm is empty, don't auto-fetch.
       if (ytSearchTerm.trim()) {
         query = ytSearchTerm.trim();
-        region = undefined; // Global search
+        region = undefined; 
         title = `Results for "${ytSearchTerm.trim()}"`;
       } else {
-        setYtResults([]); // Clear results if search term is empty on Search tab
+        setYtResults([]); 
         setNextPageToken(undefined);
-        setIsLoading(false); // Not loading anything specific
+        setIsLoading(false); 
         setResultsTitle("Search for music");
-        setHasLoadedInitialDiscoverOrSearched(true); // Considered "loaded" in the sense that it's ready for search
+        setHasLoadedInitialDiscoverOrSearched(true); 
         return; 
       }
     }
     
     setResultsTitle(title);
-    fetchMusic(query, region, undefined, true); // true for isNewQuery
-  }, [activeTab, fetchMusic]); // Removed ytSearchTerm from deps, search submit handles it
+    fetchMusic(query, region, undefined, true); 
+  }, [activeTab, fetchMusic]); // ytSearchTerm removed, handled by search submission
 
-
-  // Infinite Scroll Intersection Observer
   useEffect(() => {
     if (observer.current) observer.current.disconnect();
 
@@ -132,29 +124,24 @@ export default function YouTubeMusicSearchPlayer() {
     if (loadMoreRef.current) {
       observer.current.observe(loadMoreRef.current);
     }
-
     return () => {
-      if (observer.current) {
-        observer.current.disconnect();
-      }
+      if (observer.current) observer.current.disconnect();
     };
   }, [nextPageToken, isLoadMoreLoading, isLoading, currentApiQuery, currentApiRegion, fetchMusic]);
 
-
-  const handleYoutubeMusicSearch = async (e?: React.FormEvent) => {
+  const handleYoutubeMusicSearchSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const searchTerm = ytSearchTerm.trim();
     if (!searchTerm) {
       toast({ title: "Empty Search", description: "Please enter a song or artist to search."});
-      // Optionally, reload Discover or clear results for search tab
+      setResultsTitle("Search for music"); // Reset title for empty search
       setYtResults([]);
       setNextPageToken(undefined);
-      setResultsTitle("Search for music");
       setHasLoadedInitialDiscoverOrSearched(true);
       return;
     }
     setResultsTitle(`Results for "${searchTerm}"`);
-    fetchMusic(searchTerm, undefined, undefined, true); // true for isNewQuery, undefined for region (global search)
+    fetchMusic(searchTerm, undefined, undefined, true); 
   };
 
   const handleLikeTrack = (track: YouTubeMusicSearchResult) => {
@@ -173,8 +160,6 @@ export default function YouTubeMusicSearchPlayer() {
 
   const handleTabChange = (value: string) => {
     setActiveTab(value as CategoryTab);
-    // The useEffect listening to activeTab will handle fetching.
-    // Clear specific search term if navigating away from search tab to a category
     if (value !== "SEARCH") {
         setYtSearchTerm(""); 
     }
@@ -182,7 +167,7 @@ export default function YouTubeMusicSearchPlayer() {
 
   const ResultsSection = () => (
     <>
-      {resultsTitle && (!isLoading || ytResults.length > 0) && ( // Show title even if loading more, but not initial full load
+      {resultsTitle && (!isLoading || ytResults.length > 0) && (
         <h3 className="font-headline text-xl mb-4 mt-2">{resultsTitle}</h3>
       )}
 
@@ -226,50 +211,54 @@ export default function YouTubeMusicSearchPlayer() {
         </div>
       )}
       
-      <div ref={loadMoreRef} className="h-12 flex items-center justify-center mt-4">
+      <div ref={loadMoreRef} className="h-16 flex items-center justify-center mt-4">
         {isLoadMoreLoading && <Loader2 className="h-8 w-8 animate-spin text-primary" />}
       </div>
     </>
   );
 
-
   return (
     <div className="space-y-6">
       {currentPlayingYoutubeTrack && (
-        <Card className="shadow-lg border-primary sticky top-20 z-10 bg-background">
-          <CardHeader>
-            <CardTitle className="flex justify-between items-center text-lg font-headline">
-              <span className="truncate">Now Playing: {currentPlayingYoutubeTrack.title}</span>
-              <Button variant="ghost" size="icon" onClick={() => setCurrentPlayingYoutubeTrack(null)} aria-label="Close player">
-                <X className="h-5 w-5" />
-              </Button>
-            </CardTitle>
-            <CardDescription>{currentPlayingYoutubeTrack.artist}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="aspect-video bg-muted rounded-md overflow-hidden shadow-inner">
-              <iframe
-                width="100%"
-                height="100%"
-                src={`https://www.youtube.com/embed/${currentPlayingYoutubeTrack.videoId}?autoplay=1`}
-                title="YouTube video player"
-                frameBorder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-                className="rounded-md"
-              ></iframe>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="sticky top-[70px] z-20 space-y-4"> {/* Adjusted top for header height */}
+            <Card className="shadow-lg border-primary bg-background/95 backdrop-blur-sm">
+            <CardHeader>
+                <CardTitle className="flex justify-between items-center text-lg font-headline">
+                <span className="truncate">Now Playing: {currentPlayingYoutubeTrack.title}</span>
+                <Button variant="ghost" size="icon" onClick={() => setCurrentPlayingYoutubeTrack(null)} aria-label="Close player">
+                    <X className="h-5 w-5" />
+                </Button>
+                </CardTitle>
+                <CardDescription>{currentPlayingYoutubeTrack.artist}</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <div className="aspect-video bg-muted rounded-md overflow-hidden shadow-inner">
+                <iframe
+                    width="100%"
+                    height="100%"
+                    src={`https://www.youtube.com/embed/${currentPlayingYoutubeTrack.videoId}?autoplay=1&enablejsapi=1&origin=${typeof window !== 'undefined' ? window.location.origin : ''}`}
+                    title="YouTube video player"
+                    frameBorder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                    className="rounded-md"
+                ></iframe>
+                </div>
+            </CardContent>
+            </Card>
+            <YouTubeLyricsDisplay 
+                videoId={currentPlayingYoutubeTrack.videoId}
+                videoTitle={currentPlayingYoutubeTrack.title}
+            />
+        </div>
       )}
 
       <Card className="shadow-md">
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
           <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 border-b rounded-t-lg bg-card p-0">
-             {/* Adjusted grid-cols for better responsiveness on small screens */}
             <TabsTrigger value="DISCOVER" className="rounded-tl-lg data-[state=active]:shadow-none data-[state=active]:border-b-transparent">Discover</TabsTrigger>
             <TabsTrigger value="INDIA" className="data-[state=active]:shadow-none data-[state=active]:border-b-transparent">India</TabsTrigger>
-            <TabsTrigger value="USA" className="data-[state=active]:shadow-none data-[state=active]:border-b-transparent sm:rounded-none">USA</TabsTrigger> {/* sm:rounded-none to avoid double rounding issues */}
+            <TabsTrigger value="USA" className="data-[state=active]:shadow-none data-[state=active]:border-b-transparent sm:rounded-none">USA</TabsTrigger>
             <TabsTrigger value="SEARCH" className="rounded-tr-lg data-[state=active]:shadow-none data-[state=active]:border-b-transparent sm:rounded-tr-lg">Search</TabsTrigger>
           </TabsList>
 
@@ -283,7 +272,7 @@ export default function YouTubeMusicSearchPlayer() {
             <ResultsSection />
           </TabsContent>
           <TabsContent value="SEARCH" className="p-4 md:p-6 mt-0">
-            <form onSubmit={handleYoutubeMusicSearch} className="flex gap-2 mb-6">
+            <form onSubmit={handleYoutubeMusicSearchSubmit} className="flex gap-2 mb-6">
               <Input
                 type="search"
                 placeholder="Enter song or artist..."
@@ -304,3 +293,4 @@ export default function YouTubeMusicSearchPlayer() {
   );
 }
 
+    
