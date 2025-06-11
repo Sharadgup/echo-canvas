@@ -1,0 +1,32 @@
+
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.docker
+    # If you need to mount volumes, for example for development:
+    # volumes:
+    #   - .:/app
+    #   - /app/node_modules
+    #   - /app/.next
+    restart: unless-stopped
+    # Add any other services like databases here if needed
+    # e.g., mongodb:
+    #   image: mongo:latest
+    #   ports:
+    #     - "27017:27017"
+    #   volumes:
+    #     - mongo-data:/data/db
+
+# volumes:
+#   mongo-data:
+
+networks:
+  default:
+    name: musical-play-network
