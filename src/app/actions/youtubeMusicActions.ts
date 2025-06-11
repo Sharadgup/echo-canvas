@@ -4,92 +4,109 @@
 export interface YouTubeMusicSearchResult {
   videoId: string;
   title: string;
-  artist: string;
+  artist: string; // Will be mapped from channelTitle
   thumbnailUrl?: string;
   youtubeVideoUrl: string;
 }
 
-// Interface based on the documented response for youtube-music4.p.rapidapi.com /search
-interface YoutubeMusicApiItem {
-  type: string; // "video", "playlist", "channel", "artist"
-  videoId?: string;
-  name: string; // Song title
-  artist?: {
-    name: string;
-    artistId?: string;
+interface YouTubeDataApiItemSnippetThumbnails {
+  default: { url: string; width: number; height: number };
+  medium: { url: string; width: number; height: number };
+  high: { url: string; width: number; height: number };
+}
+
+interface YouTubeDataApiItemSnippet {
+  publishedAt: string;
+  channelId: string;
+  title: string;
+  description: string;
+  thumbnails: YouTubeDataApiItemSnippetThumbnails;
+  channelTitle: string; // This will be used as artist
+  liveBroadcastContent: string;
+  publishTime: string;
+}
+
+interface YouTubeDataApiItemId {
+  kind: string;
+  videoId: string;
+}
+
+interface YouTubeDataApiItem {
+  kind: string;
+  etag: string;
+  id: YouTubeDataApiItemId;
+  snippet: YouTubeDataApiItemSnippet;
+}
+
+interface YouTubeDataApiResponse {
+  kind: string;
+  etag: string;
+  nextPageToken?: string;
+  regionCode?: string;
+  pageInfo: {
+    totalResults: number;
+    resultsPerPage: number;
   };
-  album?: {
-    name: string;
-    albumId?: string;
-  };
-  duration?: {
-    totalSeconds: number;
-    label: string;
-  };
-  thumbnails: Array<{
-    url: string;
-    width: number;
-    height: number;
-  }>;
-  isExplicit?: boolean;
-  // Other fields might exist for different types like playlist or artist
-  playlistId?: string; 
-  browseId?: string; // For artists/channels
+  items: YouTubeDataApiItem[];
 }
 
 
 export async function searchYoutubeMusicAction(searchTerm: string): Promise<YouTubeMusicSearchResult[]> {
-  const apiKey = process.env.NEXT_PUBLIC_RAPIDAPI_KEY;
-  const apiHost = process.env.NEXT_PUBLIC_RAPIDAPI_HOST;
+  const apiKey = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY;
 
-  if (!apiKey || !apiHost || apiHost === "YOUR_RAPIDAPI_HOST_HERE" || apiHost !== "youtube-music4.p.rapidapi.com") {
-    console.warn("RapidAPI Key or Host is not configured correctly for youtube-music4.p.rapidapi.com. Returning mock data for YouTube Music search.");
+  if (!apiKey || apiKey === "YOUR_YOUTUBE_API_KEY_HERE") {
+    console.warn("YouTube Data API Key is not configured correctly. Returning mock data for YouTube Music search.");
     // Return mock data if API details are not fully configured
     return [
-      { videoId: "dQw4w9WgXcQ", title: "Never Gonna Give You Up (Mock)", artist: "Rick Astley (Mock YT)", thumbnailUrl: `https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg`, youtubeVideoUrl: `https://www.youtube.com/watch?v=dQw4w9WgXcQ` },
-      { videoId: "kJQP7kiw5Fk", title: "Bohemian Rhapsody (Mock)", artist: "Queen (Mock YT)", thumbnailUrl: `https://i.ytimg.com/vi/kJQP7kiw5Fk/mqdefault.jpg`, youtubeVideoUrl: `https://www.youtube.com/watch?v=kJQP7kiw5Fk` },
-      { videoId: "3tmd-ClpJxA", title: "Blinding Lights (Mock)", artist: "The Weeknd (Mock YT)", thumbnailUrl: `https://i.ytimg.com/vi/3tmd-ClpJxA/mqdefault.jpg`, youtubeVideoUrl: `https://www.youtube.com/watch?v=3tmd-ClpJxA` },
+      { videoId: "dQw4w9WgXcQ", title: "Never Gonna Give You Up (Mock YT Data API)", artist: "Rick Astley (Mock YT)", thumbnailUrl: `https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg`, youtubeVideoUrl: `https://www.youtube.com/watch?v=dQw4w9WgXcQ` },
+      { videoId: "kJQP7kiw5Fk", title: "Bohemian Rhapsody (Mock YT Data API)", artist: "Queen (Mock YT)", thumbnailUrl: `https://i.ytimg.com/vi/kJQP7kiw5Fk/mqdefault.jpg`, youtubeVideoUrl: `https://www.youtube.com/watch?v=kJQP7kiw5Fk` },
+      { videoId: "3tmd-ClpJxA", title: "Blinding Lights (Mock YT Data API)", artist: "The Weeknd (Mock YT)", thumbnailUrl: `https://i.ytimg.com/vi/3tmd-ClpJxA/mqdefault.jpg`, youtubeVideoUrl: `https://www.youtube.com/watch?v=3tmd-ClpJxA` },
     ];
   }
 
-  const endpoint = `/search?query=${encodeURIComponent(searchTerm)}`; 
-  const url = `https://${apiHost}${endpoint}`;
+  const baseUrl = "https://www.googleapis.com/youtube/v3/search";
+  const params = new URLSearchParams({
+    part: "snippet",
+    q: searchTerm,
+    type: "video",
+    videoCategoryId: "10", // Category ID for "Music"
+    key: apiKey,
+    maxResults: "10",
+  });
+
+  const url = `${baseUrl}?${params.toString()}`;
 
   try {
     const response = await fetch(url, {
-      method: "GET", // youtube-music4 /search is a GET request
+      method: "GET",
       headers: {
-        "X-RapidAPI-Key": apiKey,
-        "X-RapidAPI-Host": apiHost,
+        "Accept": "application/json",
       },
     });
 
     if (!response.ok) {
-      const errorBody = await response.text();
-      console.error(`RapidAPI Error (${response.status}): ${errorBody}`);
-      throw new Error(`Failed to fetch from YouTube Music API: ${response.statusText}`);
+      const errorBody = await response.json();
+      console.error(`YouTube Data API Error (${response.status}):`, errorBody);
+      throw new Error(`Failed to fetch from YouTube Data API: ${errorBody.error?.message || response.statusText}`);
     }
 
-    // The youtube-music4.p.rapidapi.com /search endpoint returns an array directly
-    const data: YoutubeMusicApiItem[] = await response.json();
+    const data: YouTubeDataApiResponse = await response.json();
 
-    if (Array.isArray(data)) {
-      return data
-        .filter(item => item.type === 'video' && item.videoId) // Ensure we only process video types with a videoId
-        .map((item: YoutubeMusicApiItem) => ({
-          videoId: item.videoId!,
-          title: item.name || "Unknown Title",
-          artist: item.artist?.name || "Unknown Artist",
-          thumbnailUrl: item.thumbnails?.find(t => t.height >= 90)?.url || item.thumbnails?.[0]?.url, // Get a decent quality thumbnail
-          youtubeVideoUrl: `https://www.youtube.com/watch?v=${item.videoId}`,
-        }))
-        .slice(0, 10); // Limit results
+    if (data.items && Array.isArray(data.items)) {
+      return data.items
+        .filter(item => item.id?.videoId && item.snippet?.title && item.snippet?.channelTitle) // Basic validation
+        .map((item: YouTubeDataApiItem) => ({
+          videoId: item.id.videoId,
+          title: item.snippet.title,
+          artist: item.snippet.channelTitle, // Using channelTitle as artist
+          thumbnailUrl: item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url,
+          youtubeVideoUrl: `https://www.youtube.com/watch?v=${item.id.videoId}`,
+        }));
     }
-    console.warn("YouTube Music API response format unexpected (expected an array). Data:", data);
+    console.warn("YouTube Data API response format unexpected. Data:", data);
     return [];
   } catch (error) {
-    console.error("Error calling YouTube Music API:", error);
-    return [];
+    console.error("Error calling YouTube Data API:", error);
+    return []; // Return empty array on error, or re-throw as needed
   }
 }
-
