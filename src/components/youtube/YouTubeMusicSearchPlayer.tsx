@@ -15,6 +15,13 @@ interface YouTubeMusicSearchPlayerProps {
   // Props to customize behavior or appearance if needed later
 }
 
+const predefinedInitialTracks: YouTubeMusicSearchResult[] = [
+  { videoId: "kJQP7kiw5Fk", title: "Bohemian Rhapsody", artist: "Queen", thumbnailUrl: `https://i.ytimg.com/vi/kJQP7kiw5Fk/mqdefault.jpg`, youtubeVideoUrl: `https://www.youtube.com/watch?v=kJQP7kiw5Fk` },
+  { videoId: "3tmd-ClpJxA", title: "Blinding Lights", artist: "The Weeknd", thumbnailUrl: `https://i.ytimg.com/vi/3tmd-ClpJxA/mqdefault.jpg`, youtubeVideoUrl: `https://www.youtube.com/watch?v=3tmd-ClpJxA` },
+  { videoId: "hTWKbfoikeg", title: "Shape of You", artist: "Ed Sheeran", thumbnailUrl: `https://i.ytimg.com/vi/hTWKbfoikeg/mqdefault.jpg`, youtubeVideoUrl: `https://www.youtube.com/watch?v=hTWKbfoikeg` },
+];
+
+
 export default function YouTubeMusicSearchPlayer({}: YouTubeMusicSearchPlayerProps) {
   const [ytSearchTerm, setYtSearchTerm] = useState("");
   const [ytResults, setYtResults] = useState<YouTubeMusicSearchResult[]>([]);
@@ -72,6 +79,9 @@ export default function YouTubeMusicSearchPlayer({}: YouTubeMusicSearchPlayerPro
     }
   }, [ytResults, hasYtSearched, isYtLoading])
 
+  const tracksToDisplay = hasYtSearched ? ytResults : predefinedInitialTracks;
+  const displayTitle = hasYtSearched ? (ytResults.length > 0 ? `YouTube Music Results for "${ytSearchTerm}"` : "") : "Discover Music";
+
   return (
     <div className="space-y-6">
       <Card className="shadow-md">
@@ -81,7 +91,7 @@ export default function YouTubeMusicSearchPlayer({}: YouTubeMusicSearchPlayerPro
             Search YouTube Music
           </CardTitle>
           <CardDescription>
-            Find tracks on YouTube Music to play in the app.
+            Find tracks on YouTube Music to play in the app, or explore some popular choices below.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -141,18 +151,16 @@ export default function YouTubeMusicSearchPlayer({}: YouTubeMusicSearchPlayerPro
           <Music className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <p className="text-xl font-semibold text-muted-foreground">No YouTube Music results</p>
           <p className="text-sm text-muted-foreground">
-            {`No results for "${ytSearchTerm}". Check your search or API configuration.`}
+            {ytSearchTerm ? `No results for "${ytSearchTerm}". Check your search or API configuration.` : "No results found."}
           </p>
         </div>
       )}
 
-      {!isYtLoading && ytResults.length > 0 && (
+      {!isYtLoading && tracksToDisplay.length > 0 && (
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold">
-            {`YouTube Music Results for "${ytSearchTerm}"`}
-          </h3>
+          {displayTitle && <h3 className="text-lg font-semibold">{displayTitle}</h3>}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {ytResults.map((track) => (
+            {tracksToDisplay.map((track) => (
               <SongCard
                 key={track.videoId}
                 title={track.title}
@@ -171,13 +179,15 @@ export default function YouTubeMusicSearchPlayer({}: YouTubeMusicSearchPlayerPro
           </div>
         </div>
       )}
-      {!isYtLoading && !hasYtSearched && !currentPlayingYoutubeTrack && (
+      
+      {!isYtLoading && !hasYtSearched && tracksToDisplay.length === 0 && !currentPlayingYoutubeTrack && (
          <div className="text-center py-8 border-2 border-dashed border-muted-foreground/30 rounded-lg">
             <Youtube className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <p className="text-xl font-semibold text-muted-foreground">Search for tracks on YouTube Music</p>
-            <p className="text-sm text-muted-foreground">Enter a song or artist above to begin.</p>
+            <p className="text-sm text-muted-foreground">Enter a song or artist above to begin, or explore suggested tracks.</p>
         </div>
       )}
     </div>
   );
 }
+
