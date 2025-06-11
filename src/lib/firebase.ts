@@ -5,7 +5,7 @@ import { getFirestore, collection, query, where, getDocs, addDoc, serverTimestam
 import { getStorage } from 'firebase/storage';
 
 // Check for essential Firebase config variables
-const requiredEnvVars: (keyof NodeJS.ProcessEnv)[] = [
+const requiredEnvVars: string[] = [ // Changed to string[] for process.env access
   'NEXT_PUBLIC_FIREBASE_API_KEY',
   'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',
   'NEXT_PUBLIC_FIREBASE_PROJECT_ID',
@@ -15,12 +15,15 @@ const requiredEnvVars: (keyof NodeJS.ProcessEnv)[] = [
 ];
 
 for (const varName of requiredEnvVars) {
-  if (!process.env[varName]) {
-    // This error will be thrown during the build if a variable is missing or empty
+  const envVarValue = process.env[varName];
+  if (!envVarValue) {
+    // This error will be thrown during build or runtime if a variable is missing or empty
     throw new Error(
       `Firebase config error: Environment variable ${varName} is not defined or is empty. ` +
-      `Ensure it is correctly set in your .env.local file for local builds, or in your hosting provider's environment variables. ` +
-      `Current value: '${process.env[varName]}'`
+      `1. Ensure it is correctly set in your '.env.local' file in the project ROOT directory. ` +
+      `2. You MUST RESTART your Next.js development server after creating or modifying '.env.local'. ` +
+      `3. For deployments, set this in your hosting provider's environment variables. ` +
+      `Current value for ${varName}: '${envVarValue}' (This indicates it's missing or Next.js hasn't picked it up).`
     );
   }
 }
@@ -68,3 +71,4 @@ export {
   serverTimestamp,
   Timestamp
 };
+
