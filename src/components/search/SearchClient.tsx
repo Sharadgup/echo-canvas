@@ -17,8 +17,8 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger, // Not used directly here for programmatic open
-  DialogClose,
+  // DialogTrigger, // Not used directly here for programmatic open
+  // DialogClose, // Not needed as DialogContent has X
 } from "@/components/ui/dialog";
 
 interface SearchResult {
@@ -74,12 +74,12 @@ export default function SearchClient() {
     await new Promise(resolve => setTimeout(resolve, 1000));
 
     const mockResults: SearchResult[] = searchTerm.toLowerCase().includes("love") ? [
-      { id: "1", title: "Love Story", artist: "Taylor Swift", type: "song" },
-      { id: "2", title: "Crazy in Love", artist: "Beyoncé", type: "song" },
-      { id: "3", title: "Love Yourself", artist: "Justin Bieber", type: "song" },
+      { id: "1", title: "Love Story", artist: "Taylor Swift", type: "song", uri: "spotify:track:1", spotifyUrl: "#" },
+      { id: "2", title: "Crazy in Love", artist: "Beyoncé", type: "song", uri: "spotify:track:2", spotifyUrl: "#" },
+      { id: "3", title: "Love Yourself", artist: "Justin Bieber", type: "song", uri: "spotify:track:3", spotifyUrl: "#" },
     ] : searchTerm.toLowerCase().includes("rock") ? [
-      { id: "4", title: "Rock Anthems (Artist)", artist: "Various Artists", type: "artist" },
-      { id: "5", title: "Bohemian Rhapsody", artist: "Queen", type: "song" },
+      { id: "4", title: "Rock Anthems (Artist)", artist: "Various Artists", type: "artist", uri: "spotify:artist:1", spotifyUrl: "#" },
+      { id: "5", title: "Bohemian Rhapsody", artist: "Queen", type: "song", uri: "spotify:track:5", spotifyUrl: "#" },
     ] : [];
 
     setResults(mockResults);
@@ -197,8 +197,12 @@ export default function SearchClient() {
   };
 
   const handlePlayInApp = (track: SearchResult) => {
-    setSelectedTrackForEmbed(track);
-    setIsEmbedDialogOpen(true);
+    if (track.type === "song" && track.id) {
+        setSelectedTrackForEmbed(track);
+        setIsEmbedDialogOpen(true);
+    } else {
+        toast({ title: "Cannot Play", description: "This item is not a playable song or is missing an ID.", variant: "default"});
+    }
   };
 
   const currentDisplayResults = spotifyTopTracks.length > 0 ? spotifyTopTracks : results;
@@ -343,12 +347,12 @@ export default function SearchClient() {
 
         {selectedTrackForEmbed && (
           <Dialog open={isEmbedDialogOpen} onOpenChange={setIsEmbedDialogOpen}>
-            <DialogContent className="sm:max-w-[425px] md:max-w-md lg:max-w-lg w-full p-0"> {/* Adjusted width and removed padding for iframe */}
+            <DialogContent className="sm:max-w-md md:max-w-lg lg:max-w-xl w-full p-0">
               <DialogHeader className="p-4 border-b">
                 <DialogTitle>Playing: {selectedTrackForEmbed.title}</DialogTitle>
                 <DialogDescription>{selectedTrackForEmbed.artist}</DialogDescription>
               </DialogHeader>
-              <div className="aspect-auto h-[100px] md:h-[120px]"> {/* Height of Spotify compact player */}
+              <div className="h-[352px]"> {/* Standard height for full Spotify track embed */}
                  <iframe
                     title={`Spotify Embed: ${selectedTrackForEmbed.title}`}
                     src={`https://open.spotify.com/embed/track/${selectedTrackForEmbed.id}?utm_source=generator&theme=0`}
@@ -359,13 +363,6 @@ export default function SearchClient() {
                     loading="lazy"
                   />
               </div>
-               {/* <DialogFooter className="p-4 border-t">
-                <DialogClose asChild>
-                  <Button type="button" variant="outline">
-                    Close
-                  </Button>
-                </DialogClose>
-              </DialogFooter> */}
             </DialogContent>
           </Dialog>
         )}
@@ -373,6 +370,3 @@ export default function SearchClient() {
     </Card>
   );
 }
-
-
-    
