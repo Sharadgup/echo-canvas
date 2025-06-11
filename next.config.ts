@@ -17,12 +17,13 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
-      {
-        protocol: 'https',
-        hostname: 'i.scdn.co',
-        port: '',
-        pathname: '/**',
-      },
+      // Removed Spotify CDN: i.scdn.co
+      // {
+      //   protocol: 'https',
+      //   hostname: 'i.scdn.co',
+      //   port: '',
+      //   pathname: '/**',
+      // },
     ],
   },
   // For documentation purposes, ensure these are set in your .env.local file for Firebase

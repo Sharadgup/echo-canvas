@@ -2,7 +2,7 @@
 import UserSongsList from '@/components/dashboard/UserSongsList';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Music, UploadCloud, RadioTower, Search } from 'lucide-react';
+import { Music, UploadCloud } from 'lucide-react'; // Removed RadioTower, Search
 import Link from 'next/link';
 
 export default function DashboardPage() {
@@ -12,7 +12,7 @@ export default function DashboardPage() {
         <CardHeader className="text-center">
           <Music className="mx-auto h-12 w-12 text-primary mb-3" />
           <CardTitle className="text-3xl font-headline">Your Music Dashboard</CardTitle>
-          <CardDescription>Manage your uploaded songs, get AI-powered remix ideas, and connect to Spotify.</CardDescription>
+          <CardDescription>Manage your uploaded songs and get AI-powered remix ideas.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col sm:flex-row justify-center items-center gap-4">
             <Button asChild size="lg" className="shadow-md hover:shadow-lg transition-shadow">
@@ -23,6 +23,8 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
+      {/* Removed Spotify Integration Card */}
+      {/* 
       <Card className="shadow-lg border-accent">
         <CardHeader>
           <div className="flex flex-col items-center text-center">
@@ -42,6 +44,7 @@ export default function DashboardPage() {
           </Button>
         </CardContent>
       </Card>
+      */}
       
       <UserSongsList />
     </div>
