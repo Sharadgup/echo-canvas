@@ -8,16 +8,17 @@ import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { Menu, Music, User, LogIn, LogOut, Search as SearchIcon, ListMusic, GitBranch, SlidersHorizontal, LayoutDashboard } from 'lucide-react'; // Added LayoutDashboard
+import { Menu, Music, User, LogIn, LogOut, Search as SearchIcon, ListMusic, GitBranch, SlidersHorizontal, LayoutDashboard, Sun, Moon } from 'lucide-react'; // Added Sun, Moon
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react'; 
+import { useTheme } from '@/context/ThemeContext'; // Added
 
 export default function Header() {
   const { user, loading, isUserProcessing, setIsUserProcessing } = useAuthContext();
   const router = useRouter();
   const { toast } = useToast();
   const [isSheetOpen, setIsSheetOpen] = useState(false);
-
+  const { theme, toggleTheme } = useTheme(); // Added theme context
 
   const handleLogout = async () => {
     setIsUserProcessing(true);
@@ -35,17 +36,33 @@ export default function Header() {
   };
 
   const navLinks = [
-    { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard }, // Added Dashboard
+    { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/playlist', label: 'Playlist', icon: ListMusic },
     { href: '/visualizer', label: 'Visualizer', icon: GitBranch },
     { href: '/search', label: 'Search', icon: SearchIcon },
     { href: '/mixer', label: 'Mixer', icon: SlidersHorizontal },
   ];
 
+  const ThemeToggleButton = ({ isMobile = false }: { isMobile?: boolean }) => (
+    <Button
+      variant="ghost"
+      size={isMobile ? "default" : "icon"}
+      onClick={() => {
+        toggleTheme();
+        if (isMobile) setIsSheetOpen(false);
+      }}
+      aria-label="Toggle theme"
+      className={isMobile ? "w-full justify-start gap-2" : ""}
+    >
+      {theme === 'dark' ? <Sun className={isMobile ? "h-4 w-4" : "h-5 w-5"} /> : <Moon className={isMobile ? "h-4 w-4" : "h-5 w-5"} />}
+      {isMobile && (theme === 'dark' ? 'Light Mode' : 'Dark Mode')}
+    </Button>
+  );
+
   const NavContent = ({ mobile }: { mobile?: boolean }) => (
     <>
       {navLinks.map((link) => (
-        <Button key={link.href} variant="ghost" asChild onClick={() => mobile && setIsSheetOpen(false)}>
+        <Button key={link.href} variant="ghost" asChild onClick={() => mobile && setIsSheetOpen(false)} className={mobile ? "w-full justify-start" : ""}>
           <Link href={link.href} className="flex items-center gap-2">
             <link.icon className="h-4 w-4" /> {link.label}
           </Link>
@@ -53,29 +70,30 @@ export default function Header() {
       ))}
       {user ? (
         <>
-          <Button variant="ghost" asChild onClick={() => mobile && setIsSheetOpen(false)}>
+          <Button variant="ghost" asChild onClick={() => mobile && setIsSheetOpen(false)} className={mobile ? "w-full justify-start" : ""}>
             <Link href="/profile" className="flex items-center gap-2">
               <User className="h-4 w-4" /> Profile
             </Link>
           </Button>
-          <Button variant="ghost" onClick={handleLogout} disabled={isUserProcessing} className="flex items-center gap-2">
+          <Button variant="ghost" onClick={handleLogout} disabled={isUserProcessing} className={`flex items-center gap-2 ${mobile ? "w-full justify-start" : ""}`}>
             <LogOut className="h-4 w-4" /> Logout
           </Button>
         </>
       ) : (
         <>
-          <Button variant="ghost" asChild onClick={() => mobile && setIsSheetOpen(false)}>
+          <Button variant="ghost" asChild onClick={() => mobile && setIsSheetOpen(false)} className={mobile ? "w-full justify-start" : ""}>
             <Link href="/login" className="flex items-center gap-2">
               <LogIn className="h-4 w-4" /> Login
             </Link>
           </Button>
-          <Button variant="default" asChild onClick={() => mobile && setIsSheetOpen(false)}>
+          <Button variant="default" asChild onClick={() => mobile && setIsSheetOpen(false)} className={mobile ? "w-full justify-start" : ""}>
             <Link href="/signup" className="flex items-center gap-2">
               Sign Up
             </Link>
           </Button>
         </>
       )}
+      <ThemeToggleButton isMobile={mobile} />
     </>
   );
 
@@ -90,7 +108,7 @@ export default function Header() {
           <span className="font-headline">Echo Canvas</span>
         </Link>
         
-        <div className="hidden md:flex items-center space-x-2">
+        <div className="hidden md:flex items-center space-x-1"> {/* Adjusted space for new button */}
           <NavContent />
         </div>
 
@@ -103,7 +121,7 @@ export default function Header() {
               </Button>
             </SheetTrigger>
             <SheetContent side="right">
-              <nav className="flex flex-col space-y-4 pt-6">
+              <nav className="flex flex-col space-y-2 pt-6"> {/* Adjusted space-y */}
                 <NavContent mobile />
               </nav>
             </SheetContent>
