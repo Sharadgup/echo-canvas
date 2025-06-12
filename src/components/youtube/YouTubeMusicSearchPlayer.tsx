@@ -15,11 +15,12 @@ import YouTubeLyricsDisplay from "./YouTubeLyricsDisplay";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 
-type CategoryTab = "DISCOVER" | "INDIA" | "USA" | "SEARCH";
+type CategoryTab = "DISCOVER" | "INDIA" | "USA" | "TRENDING_2025" | "SEARCH";
 
 const DEFAULT_DISCOVER_QUERY_TERM = "Top Music Hits";
 const INDIA_QUERY_TERM = "Top Indian Music";
 const USA_QUERY_TERM = "Top USA Music";
+const TRENDING_2025_QUERY_TERM = "Trending Music 2025"; // New query term
 
 export default function YouTubeMusicSearchPlayer() {
   const [ytSearchTerm, setYtSearchTerm] = useState("");
@@ -77,7 +78,7 @@ export default function YouTubeMusicSearchPlayer() {
     setCurrentApiRegion(region);
 
     try {
-      const response: YouTubeMusicSearchResponse = await searchYoutubeMusicAction(query, pageToken); // Removed region from action call signature based on its definition
+      const response: YouTubeMusicSearchResponse = await searchYoutubeMusicAction(query, pageToken);
       
       setYtResults(prevResults => (isNewQuery || !pageToken) ? response.results : [...prevResults, ...response.results]);
       setNextPageToken(response.nextPageToken);
@@ -95,24 +96,26 @@ export default function YouTubeMusicSearchPlayer() {
       setIsLoading(false);
       setIsLoadMoreLoading(false);
     }
-  }, [toast, activeTab]); // Removed region from action call based on provided files
+  }, [toast, activeTab]);
   
   // Effect for handling tab changes and initial load for category tabs
    useEffect(() => {
     let query = DEFAULT_DISCOVER_QUERY_TERM;
-    let region: string | undefined = "US"; // Region is not directly used by searchYoutubeMusicAction per its definition
     let title = "Discover Music";
 
     if (activeTab === "INDIA") {
       query = INDIA_QUERY_TERM;
-      // region = "IN"; // Not used by current searchYoutubeMusicAction
       title = "Top Indian Hits";
        fetchMusic(query, undefined, undefined, true);
        setResultsTitle(title);
     } else if (activeTab === "USA") {
       query = USA_QUERY_TERM;
-      // region = "US"; // Not used by current searchYoutubeMusicAction
       title = "Top USA Hits";
+       fetchMusic(query, undefined, undefined, true);
+       setResultsTitle(title);
+    } else if (activeTab === "TRENDING_2025") { // New category
+      query = TRENDING_2025_QUERY_TERM;
+      title = "Trending 2025";
        fetchMusic(query, undefined, undefined, true);
        setResultsTitle(title);
     } else if (activeTab === "DISCOVER") {
@@ -131,7 +134,7 @@ export default function YouTubeMusicSearchPlayer() {
         setHasLoadedInitialDiscoverOrSearched(true);
       }
     }
-  }, [activeTab, fetchMusic]); // ytSearchTerm removed, handled by its own effect or submit
+  }, [activeTab, fetchMusic]); 
 
   // Effect for search term changes specifically for the SEARCH tab
   useEffect(() => {
@@ -155,7 +158,6 @@ export default function YouTubeMusicSearchPlayer() {
 
     observer.current = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && nextPageToken && !isLoadMoreLoading && !isLoading) {
-        // Pass currentApiQuery and currentApiRegion if your fetchMusic needs it for pagination
         fetchMusic(currentApiQuery, currentApiRegion, nextPageToken);
       }
     });
@@ -186,13 +188,12 @@ export default function YouTubeMusicSearchPlayer() {
 
       newRecognition.onresult = (event: SpeechRecognitionEvent) => {
         const transcript = event.results[0][0].transcript.trim();
-        setYtSearchTerm(transcript); // Update input, which will trigger search useEffect if on SEARCH tab
+        setYtSearchTerm(transcript); 
 
         if (transcript) {
           if (activeTab !== "SEARCH") {
-            setActiveTab("SEARCH"); // Switch to search tab, useEffect for activeTab/ytSearchTerm will handle fetch
+            setActiveTab("SEARCH"); 
           }
-          // If already on SEARCH tab, the change in ytSearchTerm will trigger its dedicated useEffect.
         }
         setIsListening(false);
       };
@@ -222,9 +223,9 @@ export default function YouTubeMusicSearchPlayer() {
     setSpeechSupportChecked(true);
 
     return () => {
-      recognitionRef.current?.abort(); // Use abort for more immediate stop
+      recognitionRef.current?.abort();
     };
-  }, [toast, setYtSearchTerm, activeTab, setActiveTab]); // Removed fetchMusic, setResultsTitle to rely on other effects
+  }, [toast, setYtSearchTerm, activeTab, setActiveTab]); 
 
 
   const handleYoutubeMusicSearchSubmit = async (e?: React.FormEvent) => {
@@ -238,7 +239,7 @@ export default function YouTubeMusicSearchPlayer() {
       setHasLoadedInitialDiscoverOrSearched(true);
       return;
     }
-    setActiveTab("SEARCH"); // Ensure we are on search tab
+    setActiveTab("SEARCH"); 
     setResultsTitle(`Results for "${searchTerm}"`);
     fetchMusic(searchTerm, undefined, undefined, true); 
     toast({ title: "YouTube Music Search Initiated", description: `Searching for "${searchTerm}".` });
@@ -261,9 +262,6 @@ export default function YouTubeMusicSearchPlayer() {
 
   const handleTabChange = (value: string) => {
     setActiveTab(value as CategoryTab);
-    // if (value !== "SEARCH") {
-    //     setYtSearchTerm(""); // Clear search term when switching away from search tab
-    // }
   };
 
   const handleToggleListening = () => {
@@ -379,10 +377,11 @@ export default function YouTubeMusicSearchPlayer() {
 
       <Card className="shadow-md">
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 border-b rounded-t-lg bg-card p-0">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5 border-b rounded-t-lg bg-card p-0"> {/* Adjusted grid-cols */}
             <TabsTrigger value="DISCOVER" className="rounded-tl-lg data-[state=active]:shadow-none data-[state=active]:border-b-transparent">Discover</TabsTrigger>
             <TabsTrigger value="INDIA" className="data-[state=active]:shadow-none data-[state=active]:border-b-transparent">India</TabsTrigger>
             <TabsTrigger value="USA" className="data-[state=active]:shadow-none data-[state=active]:border-b-transparent sm:rounded-none">USA</TabsTrigger>
+            <TabsTrigger value="TRENDING_2025" className="data-[state=active]:shadow-none data-[state=active]:border-b-transparent sm:rounded-none">Trending 2025</TabsTrigger> {/* New Tab Trigger */}
             <TabsTrigger value="SEARCH" className="rounded-tr-lg data-[state=active]:shadow-none data-[state=active]:border-b-transparent sm:rounded-tr-lg">Search</TabsTrigger>
           </TabsList>
 
@@ -393,6 +392,9 @@ export default function YouTubeMusicSearchPlayer() {
             <ResultsSection />
           </TabsContent>
           <TabsContent value="USA" className="p-4 md:p-6 mt-0">
+            <ResultsSection />
+          </TabsContent>
+          <TabsContent value="TRENDING_2025" className="p-4 md:p-6 mt-0"> {/* New Tab Content */}
             <ResultsSection />
           </TabsContent>
           <TabsContent value="SEARCH" className="p-4 md:p-6 mt-0">
