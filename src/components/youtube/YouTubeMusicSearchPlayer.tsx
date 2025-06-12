@@ -69,19 +69,42 @@ export default function YouTubeMusicSearchPlayer() {
   const [speechSupportChecked, setSpeechSupportChecked] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
+  // State for fallback results
+  const [fallbackResults, setFallbackResults] = useState<YouTubeMusicSearchResult[]>([]);
+  const [isFallbackSectionLoading, setIsFallbackSectionLoading] = useState<boolean>(false);
+  const [displayFallbackSection, setDisplayFallbackSection] = useState<boolean>(false);
+
 
   const { toast } = useToast();
   const observer = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
+
+  const loadFallbackResults = useCallback(async () => {
+    setIsFallbackSectionLoading(true);
+    setDisplayFallbackSection(true); 
+    try {
+        const fallbackResponse = await searchYoutubeMusicAction(DEFAULT_DISCOVER_QUERY_TERM, undefined, undefined);
+        setFallbackResults(fallbackResponse.results.slice(0, 3)); // Show 3 fallback items
+    } catch (fallbackError) {
+        console.error("Error fetching fallback results:", fallbackError);
+        setFallbackResults([]); 
+        // Optionally toast for fallback error, or fail silently
+    } finally {
+        setIsFallbackSectionLoading(false);
+    }
+  }, []);
+
+
   const fetchMusic = useCallback(async (query: string, region?: string, pageToken?: string, isNewQuery: boolean = false) => {
-    if (!query && (activeTab === "SEARCH" || activeTab === "TRENDING_BY_COUNTRY" && !selectedTrendingCountry) ) {
+    if (!query && (activeTab === "SEARCH" || (activeTab === "TRENDING_BY_COUNTRY" && !selectedTrendingCountry)) ) {
         setYtResults([]);
         setNextPageToken(undefined);
         setIsLoading(false);
         setHasLoadedInitialDiscoverOrSearched(true);
         if (activeTab === "SEARCH") setResultsTitle("Search for music");
         if (activeTab === "TRENDING_BY_COUNTRY" && !selectedTrendingCountry) setResultsTitle("Trending by Country - Select a Country");
+        setDisplayFallbackSection(false);
         return;
     }
 
@@ -90,6 +113,8 @@ export default function YouTubeMusicSearchPlayer() {
       setYtResults([]); 
       setNextPageToken(undefined);
       setHasLoadedInitialDiscoverOrSearched(false);
+      setDisplayFallbackSection(false); // Reset fallback on new primary query
+      setFallbackResults([]);
     } else if (pageToken) { 
       setIsLoadMoreLoading(true);
     } else { 
@@ -97,25 +122,37 @@ export default function YouTubeMusicSearchPlayer() {
       setHasLoadedInitialDiscoverOrSearched(false);
     }
     
-    setCurrentApiQuery(query); 
-    setCurrentApiRegion(region); 
+    // setCurrentApiQuery and setCurrentApiRegion are set by the calling useEffects
+    // to reflect the user's direct intent.
 
     try {
       const response: YouTubeMusicSearchResponse = await searchYoutubeMusicAction(query, pageToken);
       
       setYtResults(prevResults => (isNewQuery || !pageToken) ? response.results : [...prevResults, ...response.results]);
       setNextPageToken(response.nextPageToken);
-      setHasLoadedInitialDiscoverOrSearched(true);
+
+      if (isNewQuery && response.results.length === 0 && query !== DEFAULT_DISCOVER_QUERY_TERM) {
+          // Primary query (not default discover) yielded no results, load fallback.
+          loadFallbackResults();
+      } else if (response.results.length > 0) {
+          // Primary query has results, ensure fallback is not shown.
+          setDisplayFallbackSection(false);
+      }
+      // If query IS DEFAULT_DISCOVER_QUERY_TERM and it fails, no further fallback. displayFallbackSection remains false.
 
     } catch (error: any) {
-      console.error("YouTube Music fetch error:", error);
-      toast({ title: "YouTube Music Fetch Failed", description: error.message || "Could not fetch YouTube Music tracks.", variant: "destructive" });
-      setHasLoadedInitialDiscoverOrSearched(true); 
+      console.error(`YouTube Music fetch error for query "${query}":`, error);
+      toast({ title: "YouTube Music Fetch Failed", description: error.message || `Could not fetch tracks for "${query}".`, variant: "destructive" });
+      if (isNewQuery && query !== DEFAULT_DISCOVER_QUERY_TERM) {
+          // Also load fallback if primary fetch throws an error (and it wasn't the discover tab itself)
+          loadFallbackResults();
+      }
     } finally {
       setIsLoading(false);
       setIsLoadMoreLoading(false);
+      setHasLoadedInitialDiscoverOrSearched(true);
     }
-  }, [toast, activeTab, selectedTrendingCountry]);
+  }, [toast, activeTab, selectedTrendingCountry, loadFallbackResults]);
   
   useEffect(() => {
     let query = "";
@@ -126,8 +163,9 @@ export default function YouTubeMusicSearchPlayer() {
     if (activeTab !== "TRENDING_BY_COUNTRY") {
         setSelectedTrendingCountry(null); 
     }
-    if (activeTab === "SEARCH" && ytSearchTerm.trim() === "") { 
-        doFetchInitial = false;
+     if (activeTab !== "SEARCH") {
+        // Clear search term when navigating away from search tab
+        // setYtSearchTerm(""); // Commented out to persist search term visually, but not auto-search
     }
 
 
@@ -150,61 +188,71 @@ export default function YouTubeMusicSearchPlayer() {
             break;
         case "TRENDING_BY_COUNTRY":
             title = selectedTrendingCountry ? `Trending in ${selectedTrendingCountry.name}` : "Trending by Country - Select a Country";
-            if (!selectedTrendingCountry) { 
-                setYtResults([]);
-                setNextPageToken(undefined);
-                setIsLoading(false);
-                setHasLoadedInitialDiscoverOrSearched(true);
+            if (selectedTrendingCountry) {
+                query = selectedTrendingCountry.queryTerm;
+                region = selectedTrendingCountry.code;
+            } else {
+                 doFetchInitial = false; // Don't fetch if no country selected
             }
-            doFetchInitial = !!selectedTrendingCountry; 
-            if(selectedTrendingCountry) query = selectedTrendingCountry.queryTerm;
             break;
         case "SEARCH":
-            title = ytSearchTerm.trim() ? `Results for "${ytSearchTerm.trim()}"` : "Search for music";
-             if (!ytSearchTerm.trim()) {
-                setYtResults([]);
-                setNextPageToken(undefined);
-                setIsLoading(false); 
-                setHasLoadedInitialDiscoverOrSearched(true); 
+            const trimmedSearch = ytSearchTerm.trim();
+            title = trimmedSearch ? `Results for "${trimmedSearch}"` : "Search for music";
+            if (trimmedSearch) {
+                query = trimmedSearch;
+            } else {
+                doFetchInitial = false; // Don't fetch if search term is empty
             }
-            doFetchInitial = false; 
             break;
         default:
             doFetchInitial = false;
     }
     
     setResultsTitle(title);
+    setCurrentApiQuery(query || (activeTab === 'DISCOVER' ? DEFAULT_DISCOVER_QUERY_TERM : "")); // Store the intended query
+    setCurrentApiRegion(region);
+
     if (doFetchInitial && query) {
         fetchMusic(query, region, undefined, true);
+    } else if (!query && activeTab !== "SEARCH" && activeTab !== "TRENDING_BY_COUNTRY") { 
+        // If query is empty for tabs that should have a default query (like DISCOVER, though it's handled above)
+        // This case might not be strictly necessary with current logic but as a safeguard.
+        setYtResults([]);
+        setNextPageToken(undefined);
+        setIsLoading(false); 
+        setHasLoadedInitialDiscoverOrSearched(true); 
+    } else if ( (activeTab === "SEARCH" && !ytSearchTerm.trim()) || (activeTab === "TRENDING_BY_COUNTRY" && !selectedTrendingCountry) ){
+        // Explicitly clear for empty search or no country selected
+        setYtResults([]);
+        setNextPageToken(undefined);
+        setIsLoading(false); 
+        setHasLoadedInitialDiscoverOrSearched(true);
+        setDisplayFallbackSection(false); // Don't show fallback if user hasn't specified a query
     }
-  }, [activeTab, fetchMusic, ytSearchTerm]); // Added ytSearchTerm to dependencies for search tab logic
+  }, [activeTab, selectedTrendingCountry, fetchMusic]); // ytSearchTerm is handled in its own debounced effect for SEARCH tab
 
 
   useEffect(() => {
     if (activeTab === "SEARCH") {
       const searchTerm = ytSearchTerm.trim();
+      setResultsTitle(searchTerm ? `Results for "${searchTerm}"` : "Search for music");
+      setCurrentApiQuery(searchTerm);
+      setCurrentApiRegion(undefined);
+
       if (searchTerm) {
         const handler = setTimeout(() => {
-          setResultsTitle(`Results for "${searchTerm}"`);
           fetchMusic(searchTerm, undefined, undefined, true);
         }, 500); 
         return () => clearTimeout(handler);
       } else { 
-        setResultsTitle("Search for music");
         setYtResults([]);
         setNextPageToken(undefined);
         setIsLoading(false); 
         setHasLoadedInitialDiscoverOrSearched(true); 
+        setDisplayFallbackSection(false);
       }
     }
   }, [ytSearchTerm, activeTab, fetchMusic]);
-
-  useEffect(() => {
-    if (activeTab === "TRENDING_BY_COUNTRY" && selectedTrendingCountry) {
-      setResultsTitle(`Trending in ${selectedTrendingCountry.name}`);
-      fetchMusic(selectedTrendingCountry.queryTerm, selectedTrendingCountry.code, undefined, true);
-    }
-  }, [selectedTrendingCountry, activeTab, fetchMusic]);
 
 
   useEffect(() => {
@@ -212,19 +260,9 @@ export default function YouTubeMusicSearchPlayer() {
 
     observer.current = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && nextPageToken && !isLoadMoreLoading && !isLoading) {
-        let queryForLoadMore = currentApiQuery;
-        let regionForLoadMore = currentApiRegion;
-
-        if (activeTab === "TRENDING_BY_COUNTRY" && selectedTrendingCountry) {
-            queryForLoadMore = selectedTrendingCountry.queryTerm;
-            regionForLoadMore = selectedTrendingCountry.code;
-        } else if (activeTab === "SEARCH" && ytSearchTerm.trim()) {
-            queryForLoadMore = ytSearchTerm.trim();
-            regionForLoadMore = undefined;
-        }
-        
-        if (queryForLoadMore) {
-           fetchMusic(queryForLoadMore, regionForLoadMore, nextPageToken);
+        // Use currentApiQuery and currentApiRegion as they reflect the ongoing fetch context
+        if (currentApiQuery) {
+           fetchMusic(currentApiQuery, currentApiRegion, nextPageToken);
         }
       }
     });
@@ -235,7 +273,7 @@ export default function YouTubeMusicSearchPlayer() {
     return () => {
       if (observer.current) observer.current.disconnect();
     };
-  }, [nextPageToken, isLoadMoreLoading, isLoading, fetchMusic, activeTab, selectedTrendingCountry, ytSearchTerm, currentApiQuery, currentApiRegion]);
+  }, [nextPageToken, isLoadMoreLoading, isLoading, fetchMusic, currentApiQuery, currentApiRegion]);
 
 
   useEffect(() => {
@@ -260,6 +298,7 @@ export default function YouTubeMusicSearchPlayer() {
           if (activeTab !== "SEARCH") {
             setActiveTab("SEARCH"); 
           }
+          // The search will be triggered by the ytSearchTerm useEffect
         }
         setIsListening(false);
       };
@@ -291,7 +330,7 @@ export default function YouTubeMusicSearchPlayer() {
     return () => {
       recognitionRef.current?.abort();
     };
-  }, [toast, setYtSearchTerm, activeTab, setActiveTab]); 
+  }, [toast, activeTab]); 
 
 
   const handleYoutubeMusicSearchSubmit = async (e?: React.FormEvent) => {
@@ -300,18 +339,23 @@ export default function YouTubeMusicSearchPlayer() {
     if (!searchTerm) {
       toast({ title: "Empty Search", description: "Please enter a song or artist to search."});
       setResultsTitle("Search for music"); 
+      setCurrentApiQuery("");
       setYtResults([]);
       setNextPageToken(undefined);
       setHasLoadedInitialDiscoverOrSearched(true);
+      setDisplayFallbackSection(false);
       return;
     }
     if (activeTab !== "SEARCH") {
-        setActiveTab("SEARCH");
+        setActiveTab("SEARCH"); // This will trigger search via useEffect for ytSearchTerm
     } else {
+      // If already on search tab, directly fetch
       setResultsTitle(`Results for "${searchTerm}"`);
+      setCurrentApiQuery(searchTerm);
+      setCurrentApiRegion(undefined);
       fetchMusic(searchTerm, undefined, undefined, true); 
     }
-    toast({ title: "YouTube Music Search Initiated", description: `Searching for "${searchTerm}".` });
+    // toast({ title: "YouTube Music Search Initiated", description: `Searching for "${searchTerm}".` });
   };
 
 
@@ -357,32 +401,34 @@ export default function YouTubeMusicSearchPlayer() {
 
   const handleSelectTrendingCountry = (country: Country) => {
     setSelectedTrendingCountry(country);
+    // Fetching will be handled by the useEffect watching activeTab and selectedTrendingCountry
   };
 
 
   const ResultsSection = () => (
     <>
-      {resultsTitle && (!isLoading || ytResults.length > 0 || (activeTab === "TRENDING_BY_COUNTRY" && !selectedTrendingCountry)) && (
-         <h3 className="font-headline text-xl mb-4 mt-2">{resultsTitle}</h3>
+      {resultsTitle && (
+        <h3 className="font-headline text-xl mb-4 mt-2">{resultsTitle}</h3>
       )}
 
       {isLoading && ytResults.length === 0 && !(activeTab === "TRENDING_BY_COUNTRY" && !selectedTrendingCountry) && (
         <div className="text-center py-10">
           <Loader2 className="h-10 w-10 animate-spin text-primary mx-auto" />
           <p className="mt-3 text-muted-foreground">
-            {activeTab === "SEARCH" && currentApiQuery ? `Searching for "${currentApiQuery}"...` : `Loading ${resultsTitle || 'music'}...`}
+            {currentApiQuery ? `Searching for "${currentApiQuery}"...` : `Loading ${resultsTitle || 'music'}...`}
           </p>
         </div>
       )}
 
       {!isLoading && ytResults.length === 0 && hasLoadedInitialDiscoverOrSearched && 
+       !displayFallbackSection && // Only show primary "no results" if fallback isn't also being displayed/loaded
        !(activeTab === "TRENDING_BY_COUNTRY" && !selectedTrendingCountry && !isLoading) && ( 
         <div className="text-center py-10 border-2 border-dashed border-muted-foreground/30 rounded-lg">
           <Music className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <p className="text-xl font-semibold text-muted-foreground">No YouTube Music results</p>
           <p className="text-sm text-muted-foreground">
-            {activeTab === "SEARCH" && currentApiQuery ? `No results found for "${currentApiQuery}". Try a different term.` : 
-             activeTab === "TRENDING_BY_COUNTRY" && selectedTrendingCountry ? `No trending results found for ${selectedTrendingCountry.name}.` :
+            {currentApiQuery ? `No results found for "${currentApiQuery}". Try a different term or category.` : 
+             (activeTab === "TRENDING_BY_COUNTRY" && selectedTrendingCountry) ? `No trending results found for ${selectedTrendingCountry.name}.` :
              "Try a different category or search term."}
           </p>
         </div>
@@ -392,7 +438,7 @@ export default function YouTubeMusicSearchPlayer() {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           {ytResults.map((track) => (
             <SongCard
-              key={track.videoId + track.title + (Math.random().toString())} 
+              key={track.videoId} 
               title={track.title}
               artist={track.artist}
               albumArtUrl={track.thumbnailUrl || `https://placehold.co/300x300.png?text=${encodeURIComponent(track.title.substring(0,10))}`}
@@ -505,7 +551,7 @@ export default function YouTubeMusicSearchPlayer() {
                 </div>
               </ScrollArea>
             </div>
-            { (isLoading && selectedTrendingCountry) || (!isLoading && ytResults.length > 0 && selectedTrendingCountry) || (!isLoading && hasLoadedInitialDiscoverOrSearched && selectedTrendingCountry && ytResults.length === 0 ) ? (
+            { (isLoading && selectedTrendingCountry) || (!isLoading && ytResults.length > 0 && selectedTrendingCountry) || (!isLoading && hasLoadedInitialDiscoverOrSearched && selectedTrendingCountry && ytResults.length === 0 && !displayFallbackSection ) ? (
                 <ResultsSection />
             ) : !isLoading && !selectedTrendingCountry ? (
                 <div className="text-center py-10 border-2 border-dashed border-muted-foreground/30 rounded-lg">
@@ -563,6 +609,50 @@ export default function YouTubeMusicSearchPlayer() {
           </TabsContent>
         </Tabs>
       </Card>
+
+      {/* Fallback Section */}
+      {displayFallbackSection && (
+        <div className="mt-8 pt-6 border-t">
+            <h3 className="font-headline text-lg mb-4 text-muted-foreground">
+                {(ytResults.length === 0 && currentApiQuery && currentApiQuery !== DEFAULT_DISCOVER_QUERY_TERM) 
+                    ? `No results found for "${currentApiQuery}". ` 
+                    : ""} 
+                Meanwhile, discover some popular tracks:
+            </h3>
+            {isFallbackSectionLoading && (
+                <div className="text-center py-5">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
+                </div>
+            )}
+            {!isFallbackSectionLoading && fallbackResults.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    {fallbackResults.map((track) => (
+                        <SongCard
+                            key={track.videoId + "-fallback"}
+                            title={track.title}
+                            artist={track.artist}
+                            albumArtUrl={track.thumbnailUrl || `https://placehold.co/300x300.png?text=${encodeURIComponent(track.title.substring(0,10))}`}
+                            data-ai-hint="youtube music fallback"
+                            onPlay={() => setCurrentPlayingYoutubeTrack(track)}
+                            playButtonText="Play Audio"
+                            playButtonIcon={Play}
+                            isActive={currentPlayingYoutubeTrack?.videoId === track.videoId}
+                            onLike={() => handleLikeTrack(track)}
+                            isLiked={likedTracks.has(track.videoId)}
+                            likeButtonIcon={Heart}
+                        />
+                    ))}
+                </div>
+            )}
+            {!isFallbackSectionLoading && fallbackResults.length === 0 && (
+                 <div className="text-center py-6">
+                    <p className="text-sm text-muted-foreground">Could not load discovery tracks at this time.</p>
+                </div>
+            )}
+        </div>
+      )}
+
     </div>
   );
 }
+
