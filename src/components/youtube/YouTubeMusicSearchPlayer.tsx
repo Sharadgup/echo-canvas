@@ -6,7 +6,7 @@ import Image from "next/image"; // Added for thumbnail display
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Search as SearchIcon, Loader2, Play, X, Music, Heart, Mic, MicOff, Globe, MapPin, Music2 } from "lucide-react"; // Added Music2
+import { Search as SearchIcon, Loader2, Play, X, Music, Heart, Mic, MicOff, Globe, MapPin, Music2 } from "lucide-react"; 
 import SongCard from "@/components/playlist/SongCard";
 import { useToast } from "@/hooks/use-toast";
 import type { YouTubeMusicSearchResult, YouTubeMusicSearchResponse } from "@/app/actions/youtubeMusicActions";
@@ -29,6 +29,8 @@ const DEFAULT_DISCOVER_QUERY_TERM = "Top Music Hits";
 const INDIA_QUERY_TERM = "Top Indian Music";
 const USA_QUERY_TERM = "Top USA Music";
 const GLOBAL_TRENDING_QUERY_TERM = "Global Top Music Hits Now";
+// const TRENDING_2025_QUERY_TERM = "Trending Music 2025"; // Replaced by Global Trending or by Country
+
 
 const trendingCountries: Country[] = [
   { name: "United Kingdom", queryTerm: "Trending music UK", code: "GB" },
@@ -53,7 +55,7 @@ export default function YouTubeMusicSearchPlayer() {
   const [ytResults, setYtResults] = useState<YouTubeMusicSearchResult[]>([]);
   const [resultsTitle, setResultsTitle] = useState<string>("Discover Music");
 
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // Loading for main results
   const [isLoadMoreLoading, setIsLoadMoreLoading] = useState(false);
   const [hasLoadedInitialDiscoverOrSearched, setHasLoadedInitialDiscoverOrSearched] = useState(false);
 
@@ -69,7 +71,6 @@ export default function YouTubeMusicSearchPlayer() {
   const [speechSupportChecked, setSpeechSupportChecked] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
-  // State for fallback results
   const [fallbackResults, setFallbackResults] = useState<YouTubeMusicSearchResult[]>([]);
   const [isFallbackSectionLoading, setIsFallbackSectionLoading] = useState<boolean>(false);
   const [displayFallbackSection, setDisplayFallbackSection] = useState<boolean>(false);
@@ -82,17 +83,18 @@ export default function YouTubeMusicSearchPlayer() {
 
   const loadFallbackResults = useCallback(async () => {
     setIsFallbackSectionLoading(true);
-    setDisplayFallbackSection(true);
+    setDisplayFallbackSection(true); // Show the section immediately
     try {
         const fallbackResponse = await searchYoutubeMusicAction(DEFAULT_DISCOVER_QUERY_TERM, undefined);
         setFallbackResults(fallbackResponse.results.slice(0, 3)); // Show 3 fallback items
     } catch (fallbackError) {
         console.error("Error fetching fallback results:", fallbackError);
-        setFallbackResults([]);
+        setFallbackResults([]); // Clear fallback on error
+        toast({ title: "Discovery Failed", description: "Could not load discovery tracks for fallback.", variant: "default" });
     } finally {
         setIsFallbackSectionLoading(false);
     }
-  }, [setFallbackResults, setIsFallbackSectionLoading, setDisplayFallbackSection]);
+  }, [toast]); // DEFAULT_DISCOVER_QUERY_TERM is a constant, so not in deps
 
 
   const fetchMusic = useCallback(async (
@@ -107,39 +109,55 @@ export default function YouTubeMusicSearchPlayer() {
       setYtResults([]);
       setNextPageToken(undefined);
       setHasLoadedInitialDiscoverOrSearched(false);
-      setDisplayFallbackSection(false); 
-      setFallbackResults([]); 
+      // Fallback display is handled based on results below
     } else if (pageToken) {
       setIsLoadMoreLoading(true);
     } else {
-      setIsLoading(true); // Should ideally be covered by isNewQuery case
+      setIsLoading(true); 
       setHasLoadedInitialDiscoverOrSearched(false);
     }
 
     try {
       const response: YouTubeMusicSearchResponse = await searchYoutubeMusicAction(queryToFetch, pageToken);
+      const mainResults = response.results;
 
-      setYtResults(prevResults => (isNewQuery || !pageToken) ? response.results : [...prevResults, ...response.results]);
+      setYtResults(prevResults => (isNewQuery || !pageToken) ? mainResults : [...prevResults, ...mainResults]);
       setNextPageToken(response.nextPageToken);
 
-      if (isNewQuery && response.results.length === 0 && queryToFetch !== DEFAULT_DISCOVER_QUERY_TERM) {
-          loadFallbackResults();
-      } else if (response.results.length > 0) {
+      if (isNewQuery) {
+        if (mainResults.length === 0) {
+          // Main query yielded no results
+          if (queryToFetch !== DEFAULT_DISCOVER_QUERY_TERM) {
+            loadFallbackResults(); // This will set displayFallbackSection = true
+          } else {
+            // The DEFAULT_DISCOVER_QUERY_TERM itself yielded no results.
+            // No different API query for fallback. Ensure fallback section is hidden.
+            setDisplayFallbackSection(false);
+          }
+        } else {
+          // Main query has results, ensure fallback is hidden
           setDisplayFallbackSection(false);
+        }
       }
+      // If !isNewQuery (loading more), displayFallbackSection is not changed.
 
     } catch (error: any) {
       console.error(`YouTube Music fetch error for query "${queryToFetch}":`, error);
       toast({ title: "YouTube Music Fetch Failed", description: error.message || `Could not fetch tracks for "${queryToFetch}".`, variant: "destructive" });
-      if (isNewQuery && queryToFetch !== DEFAULT_DISCOVER_QUERY_TERM) {
+      if (isNewQuery) { // Only attempt fallback on error if it was a new query attempt
+        if (queryToFetch !== DEFAULT_DISCOVER_QUERY_TERM) {
           loadFallbackResults();
+        } else {
+          // Error on DEFAULT_DISCOVER_QUERY_TERM itself
+          setDisplayFallbackSection(false);
+        }
       }
     } finally {
       setIsLoading(false);
       setIsLoadMoreLoading(false);
       setHasLoadedInitialDiscoverOrSearched(true);
     }
-  }, [toast, loadFallbackResults, setYtResults, setNextPageToken, setIsLoading, setIsLoadMoreLoading, setHasLoadedInitialDiscoverOrSearched, setDisplayFallbackSection, setFallbackResults]);
+  }, [toast, loadFallbackResults]); // ytResults removed from deps as it's set inside
 
   useEffect(() => {
     let queryForEffect = "";
@@ -168,6 +186,10 @@ export default function YouTubeMusicSearchPlayer() {
             queryForEffect = GLOBAL_TRENDING_QUERY_TERM;
             titleForEffect = "Global Trending Now";
             break;
+        // case "TRENDING_2025": // Replaced
+        //     queryForEffect = TRENDING_2025_QUERY_TERM;
+        //     titleForEffect = "Trending Music 2025";
+        //     break;
         case "TRENDING_BY_COUNTRY":
             titleForEffect = selectedTrendingCountry ? `Trending in ${selectedTrendingCountry.name}` : "Trending by Country - Select a Country";
             if (selectedTrendingCountry) {
@@ -203,22 +225,30 @@ export default function YouTubeMusicSearchPlayer() {
         setHasLoadedInitialDiscoverOrSearched(true);
         setDisplayFallbackSection(false);
     }
-  }, [activeTab, selectedTrendingCountry, fetchMusic, ytSearchTerm]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps 
+  }, [activeTab, selectedTrendingCountry, ytSearchTerm, fetchMusic]); // ytSearchTerm added for search tab re-fetch
 
 
+  // This useEffect is mainly for debouncing search input or immediate search if user clears input
   useEffect(() => {
     if (activeTab === "SEARCH") {
       const searchTerm = ytSearchTerm.trim();
       setResultsTitle(searchTerm ? `Results for "${searchTerm}"` : "Search for music");
-      setCurrentApiQuery(searchTerm);
+      setCurrentApiQuery(searchTerm); // Update currentApiQuery for search tab
       setCurrentApiRegion(undefined);
 
-      // Debounced search logic is now part of the main useEffect above triggered by ytSearchTerm change when activeTab is SEARCH.
-      // This useEffect can be simplified or removed if the main one handles it.
-      // For now, let's keep it to ensure debouncing is focused, but the actual fetch is triggered from the main effect.
-      // The main useEffect handles the fetch when activeTab is 'SEARCH' and ytSearchTerm changes.
+      // No direct fetch here; relies on the main useEffect above triggered by ytSearchTerm change
+      // or the submit handler.
+      // If search term is cleared, the main effect handles setting empty results.
+      if (!searchTerm && hasLoadedInitialDiscoverOrSearched) {
+         setYtResults([]);
+         setNextPageToken(undefined);
+         setDisplayFallbackSection(false);
+         // setHasLoadedInitialDiscoverOrSearched(true); // Keep this true to show "Search for music"
+      }
     }
-  }, [ytSearchTerm, activeTab]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ytSearchTerm, activeTab]); // Removed fetchMusic to avoid direct call, main effect handles it.
 
 
   useEffect(() => {
@@ -257,12 +287,13 @@ export default function YouTubeMusicSearchPlayer() {
 
       newRecognition.onresult = (event: SpeechRecognitionEvent) => {
         const transcript = event.results[0][0].transcript.trim();
-        setYtSearchTerm(transcript);
+        setYtSearchTerm(transcript); // This will trigger the useEffect for search
 
         if (transcript) {
           if (activeTab !== "SEARCH") {
-            setActiveTab("SEARCH");
+            setActiveTab("SEARCH"); // Switch to search tab, main useEffect will fetch
           }
+          // The main useEffect listening to activeTab and ytSearchTerm handles fetching
         }
         setIsListening(false);
       };
@@ -294,7 +325,8 @@ export default function YouTubeMusicSearchPlayer() {
     return () => {
       recognitionRef.current?.abort();
     };
-  }, [toast, activeTab]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toast, activeTab]); // Removed setActiveTab from deps to avoid re-init on tab switch alone
 
 
   const handleYoutubeMusicSearchSubmit = async (e?: React.FormEvent) => {
@@ -306,13 +338,15 @@ export default function YouTubeMusicSearchPlayer() {
       setCurrentApiQuery("");
       setYtResults([]);
       setNextPageToken(undefined);
-      setHasLoadedInitialDiscoverOrSearched(true);
+      setHasLoadedInitialDiscoverOrSearched(true); 
       setDisplayFallbackSection(false);
       return;
     }
+    // If not on search tab, switch to it. The main useEffect will handle the fetch.
     if (activeTab !== "SEARCH") {
         setActiveTab("SEARCH");
     } else {
+      // If already on search tab, directly fetch.
       setResultsTitle(`Results for "${searchTerm}"`);
       setCurrentApiQuery(searchTerm);
       setCurrentApiRegion(undefined);
@@ -363,6 +397,7 @@ export default function YouTubeMusicSearchPlayer() {
 
   const handleSelectTrendingCountry = (country: Country) => {
     setSelectedTrendingCountry(country);
+    // The main useEffect will pick up this change and fetch data if activeTab is TRENDING_BY_COUNTRY
   };
 
 
@@ -382,7 +417,7 @@ export default function YouTubeMusicSearchPlayer() {
       )}
 
       {!isLoading && ytResults.length === 0 && hasLoadedInitialDiscoverOrSearched &&
-       !displayFallbackSection &&
+       !displayFallbackSection && // Only show this if fallback is NOT being displayed
        !(activeTab === "TRENDING_BY_COUNTRY" && !selectedTrendingCountry && !isLoading) && (
         <div className="text-center py-10 border-2 border-dashed border-muted-foreground/30 rounded-lg">
           <Music className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
@@ -399,7 +434,7 @@ export default function YouTubeMusicSearchPlayer() {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           {ytResults.map((track) => (
             <SongCard
-              key={track.videoId}
+              key={track.videoId} // Changed from Math.random()
               title={track.title}
               artist={track.artist}
               albumArtUrl={track.thumbnailUrl || `https://placehold.co/300x300.png?text=${encodeURIComponent(track.title.substring(0,10))}`}
@@ -425,7 +460,7 @@ export default function YouTubeMusicSearchPlayer() {
   return (
     <div className="space-y-6">
       {currentPlayingYoutubeTrack && (
-        <div className="sticky top-[70px] z-20 space-y-4">
+        <div className="sticky top-[70px] z-20 space-y-4"> {/* Adjusted top for header height */}
             <Card className="shadow-lg border-primary bg-background/95 backdrop-blur-sm">
             <CardHeader>
                 <CardTitle className="flex justify-between items-center text-lg font-headline">
@@ -442,23 +477,25 @@ export default function YouTubeMusicSearchPlayer() {
             <CardContent className="flex flex-col items-center">
                 {currentPlayingYoutubeTrack.thumbnailUrl && (
                     <Image
-                        src={currentPlayingYoutubeTrack.thumbnailUrl.replace('mqdefault.jpg', 'hqdefault.jpg')}
+                        src={currentPlayingYoutubeTrack.thumbnailUrl.replace('mqdefault.jpg', 'hqdefault.jpg')} // Try for higher quality
                         alt={`Thumbnail for ${currentPlayingYoutubeTrack.title}`}
-                        width={320}
+                        width={320} // Adjusted for better aspect ratio
                         height={180}
                         className="rounded-md shadow-md mb-4"
                         data-ai-hint="music video thumbnail"
-                        priority={true}
+                        priority={true} // Hint to load this image sooner
                     />
                 )}
+                {/* Hidden iframe for audio playback */}
                 <iframe
-                    key={currentPlayingYoutubeTrack.videoId}
+                    key={currentPlayingYoutubeTrack.videoId} // Key ensures iframe reloads on song change
                     width="0"
                     height="0"
                     style={{ position: 'absolute', top: '-9999px', left: '-9999px', border: 'none' }}
                     src={`https://www.youtube.com/embed/${currentPlayingYoutubeTrack.videoId}?autoplay=1&enablejsapi=1&origin=${typeof window !== 'undefined' ? window.location.origin : ''}`}
                     title="YouTube audio player (hidden)"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    // allowFullScreen // Not needed for audio only
                 ></iframe>
                 <p className="text-sm text-muted-foreground mt-2">Audio is playing. Close player with 'X' above to stop.</p>
             </CardContent>
@@ -472,11 +509,12 @@ export default function YouTubeMusicSearchPlayer() {
 
       <Card className="shadow-md">
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-           <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 border-b rounded-t-lg bg-card p-0">
+           <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 border-b rounded-t-lg bg-card p-0"> {/* sm:grid-cols-5 updated to sm:grid-cols-6 */}
             <TabsTrigger value="DISCOVER" className="rounded-tl-lg data-[state=active]:shadow-none data-[state=active]:border-b-transparent"><Globe className="mr-1 h-4 w-4 sm:hidden md:inline-block" />Discover</TabsTrigger>
             <TabsTrigger value="INDIA" className="data-[state=active]:shadow-none data-[state=active]:border-b-transparent"><MapPin className="mr-1 h-4 w-4 sm:hidden md:inline-block" />India</TabsTrigger>
             <TabsTrigger value="USA" className="data-[state=active]:shadow-none data-[state=active]:border-b-transparent"><MapPin className="mr-1 h-4 w-4 sm:hidden md:inline-block" />USA</TabsTrigger>
             <TabsTrigger value="GLOBAL_TRENDING" className="data-[state=active]:shadow-none data-[state=active]:border-b-transparent"><Globe className="mr-1 h-4 w-4 sm:hidden md:inline-block" />Global</TabsTrigger>
+            {/* <TabsTrigger value="TRENDING_2025" className="data-[state=active]:shadow-none data-[state=active]:border-b-transparent"><TrendingUp className="mr-1 h-4 w-4 sm:hidden md:inline-block" />Trending 2025</TabsTrigger> */}
             <TabsTrigger value="TRENDING_BY_COUNTRY" className="data-[state=active]:shadow-none data-[state=active]:border-b-transparent"><MapPin className="mr-1 h-4 w-4 sm:hidden md:inline-block" />By Country</TabsTrigger>
             <TabsTrigger value="SEARCH" className="rounded-tr-lg data-[state=active]:shadow-none data-[state=active]:border-b-transparent sm:rounded-tr-lg"><SearchIcon className="mr-1 h-4 w-4 sm:hidden md:inline-block" />Search</TabsTrigger>
           </TabsList>
@@ -493,6 +531,9 @@ export default function YouTubeMusicSearchPlayer() {
           <TabsContent value="GLOBAL_TRENDING" className="p-4 md:p-6 mt-0">
             <ResultsSection />
           </TabsContent>
+          {/* <TabsContent value="TRENDING_2025" className="p-4 md:p-6 mt-0">
+            <ResultsSection />
+          </TabsContent> */}
           <TabsContent value="TRENDING_BY_COUNTRY" className="p-4 md:p-6 mt-0 space-y-4">
             <div>
               <h4 className="font-semibold text-lg mb-3">Select a Country:</h4>
@@ -512,7 +553,10 @@ export default function YouTubeMusicSearchPlayer() {
                 </div>
               </ScrollArea>
             </div>
-            { (isLoading && selectedTrendingCountry) || (!isLoading && ytResults.length > 0 && selectedTrendingCountry) || (!isLoading && hasLoadedInitialDiscoverOrSearched && selectedTrendingCountry && ytResults.length === 0 && !displayFallbackSection ) ? (
+            { /* Render ResultsSection if a country is selected and loading, or has results, or has no results (and fallback isn't active) */ }
+            { (isLoading && selectedTrendingCountry) || 
+              (!isLoading && ytResults.length > 0 && selectedTrendingCountry) || 
+              (!isLoading && hasLoadedInitialDiscoverOrSearched && selectedTrendingCountry && ytResults.length === 0 && !displayFallbackSection ) ? (
                 <ResultsSection />
             ) : !isLoading && !selectedTrendingCountry ? (
                 <div className="text-center py-10 border-2 border-dashed border-muted-foreground/30 rounded-lg">
@@ -571,12 +615,13 @@ export default function YouTubeMusicSearchPlayer() {
         </Tabs>
       </Card>
 
+      {/* Fallback section: shown if displayFallbackSection is true */}
       {displayFallbackSection && (
         <div className="mt-8 pt-6 border-t">
             <h3 className="font-headline text-lg mb-4 text-muted-foreground">
-                {(ytResults.length === 0 && currentApiQuery && currentApiQuery !== DEFAULT_DISCOVER_QUERY_TERM)
-                    ? `No results found for "${currentApiQuery}". `
-                    : ""}
+                {(ytResults.length === 0 && currentApiQuery && currentApiQuery !== DEFAULT_DISCOVER_QUERY_TERM) 
+                    ? `No results found for "${currentApiQuery}". ` 
+                    : ""} 
                 Meanwhile, discover some popular tracks:
             </h3>
             {isFallbackSectionLoading && (
