@@ -6,7 +6,7 @@ import Image from "next/image"; // Added for thumbnail display
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Search as SearchIcon, Loader2, Play, X, Music, Heart, Mic, MicOff, Globe, MapPin } from "lucide-react";
+import { Search as SearchIcon, Loader2, Play, X, Music, Heart, Mic, MicOff, Globe, MapPin, Music2 } from "lucide-react"; // Added Music2
 import SongCard from "@/components/playlist/SongCard";
 import { useToast } from "@/hooks/use-toast";
 import type { YouTubeMusicSearchResult, YouTubeMusicSearchResponse } from "@/app/actions/youtubeMusicActions";
@@ -164,10 +164,10 @@ export default function YouTubeMusicSearchPlayer() {
              if (!ytSearchTerm.trim()) {
                 setYtResults([]);
                 setNextPageToken(undefined);
-                setIsLoading(false);
-                setHasLoadedInitialDiscoverOrSearched(true);
+                setIsLoading(false); 
+                setHasLoadedInitialDiscoverOrSearched(true); 
             }
-            doFetchInitial = false;
+            doFetchInitial = false; 
             break;
         default:
             doFetchInitial = false;
@@ -177,7 +177,7 @@ export default function YouTubeMusicSearchPlayer() {
     if (doFetchInitial && query) {
         fetchMusic(query, region, undefined, true);
     }
-  }, [activeTab, fetchMusic]); 
+  }, [activeTab, fetchMusic, ytSearchTerm]); // Added ytSearchTerm to dependencies for search tab logic
 
 
   useEffect(() => {
@@ -422,7 +422,10 @@ export default function YouTubeMusicSearchPlayer() {
             <Card className="shadow-lg border-primary bg-background/95 backdrop-blur-sm">
             <CardHeader>
                 <CardTitle className="flex justify-between items-center text-lg font-headline">
-                <span className="truncate">Now Playing: {currentPlayingYoutubeTrack.title}</span>
+                <span className="truncate flex items-center">
+                    <Music2 className="mr-2 h-5 w-5 text-primary animate-pulse" />
+                    Now Playing: {currentPlayingYoutubeTrack.title}
+                </span>
                 <Button variant="ghost" size="icon" onClick={() => setCurrentPlayingYoutubeTrack(null)} aria-label="Close player">
                     <X className="h-5 w-5" />
                 </Button>
@@ -438,11 +441,11 @@ export default function YouTubeMusicSearchPlayer() {
                         height={180}
                         className="rounded-md shadow-md mb-4"
                         data-ai-hint="music video thumbnail"
-                        priority={true} // Prioritize loading the current playing track's thumbnail
+                        priority={true}
                     />
                 )}
                 <iframe
-                    key={currentPlayingYoutubeTrack.videoId} // Important: forces iframe to re-render on song change
+                    key={currentPlayingYoutubeTrack.videoId} 
                     width="0"
                     height="0"
                     style={{ position: 'absolute', top: '-9999px', left: '-9999px', border: 'none' }}
@@ -563,5 +566,3 @@ export default function YouTubeMusicSearchPlayer() {
     </div>
   );
 }
-
-    
