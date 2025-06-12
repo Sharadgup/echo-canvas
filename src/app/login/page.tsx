@@ -38,6 +38,14 @@ export default function LoginPage() {
 
   const handleLogin = async (values: { email: string; password: string }) => {
     try {
+      if (!auth) {
+        toast({
+          title: "Login Error",
+          description: "Authentication service is not available. Please try again later.",
+          variant: "destructive",
+        });
+        return;
+      }
       await signInWithEmailAndPassword(auth, values.email, values.password);
       toast({ title: "Login successful", description: "Welcome back!" });
       router.push("/profile");
@@ -48,6 +56,15 @@ export default function LoginPage() {
 
   const handleGoogleLogin = async () => {
     setIsUserProcessing(true);
+    if (!auth || !googleProvider) {
+      toast({
+        title: "Google Login Failed",
+        description: "Google Sign-In is currently unavailable due to a configuration issue. Please try again later or contact support.",
+        variant: "destructive",
+      });
+      setIsUserProcessing(false);
+      return;
+    }
     try {
       await signInWithPopup(auth, googleProvider);
       toast({ title: "Login successful", description: "Welcome with Google!" });

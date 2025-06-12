@@ -37,6 +37,14 @@ export default function SignupPage() {
 
   const handleSignup = async (values: { email: string; password: string }) => {
     try {
+      if (!auth) {
+        toast({
+          title: "Sign-up Error",
+          description: "Authentication service is not available. Please try again later.",
+          variant: "destructive",
+        });
+        return;
+      }
       await createUserWithEmailAndPassword(auth, values.email, values.password);
       toast({ title: "Signup successful", description: "Welcome to Echo Canvas!" });
       router.push("/profile"); 
@@ -47,6 +55,15 @@ export default function SignupPage() {
 
   const handleGoogleSignup = async () => {
     setIsUserProcessing(true);
+    if (!auth || !googleProvider) {
+      toast({
+        title: "Google Sign-up Failed",
+        description: "Google Sign-Up is currently unavailable due to a configuration issue. Please try again later or contact support.",
+        variant: "destructive",
+      });
+      setIsUserProcessing(false);
+      return;
+    }
     try {
       await signInWithPopup(auth, googleProvider);
       toast({ title: "Signup successful", description: "Welcome to Echo Canvas with Google!" });
