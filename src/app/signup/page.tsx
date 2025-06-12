@@ -58,7 +58,7 @@ export default function SignupPage() {
     if (!auth || !googleProvider) {
       toast({
         title: "Google Sign-up Failed",
-        description: "Google Sign-Up is currently unavailable due to a configuration issue. Please try again later or contact support.",
+        description: "Firebase is not configured correctly in the deployment environment. Please check your Vercel/server environment variables and Firebase project settings.",
         variant: "destructive",
       });
       setIsUserProcessing(false);
