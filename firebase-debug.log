@@ -1,13 +1,13 @@
-[debug] [2025-06-12T05:03:48.768Z] ----------------------------------------------------------------------
-[debug] [2025-06-12T05:03:48.771Z] Command:       /nix/store/rbdrkcs5kkwpalxcd7c6bnm33lk2955n-nodejs-20.19.0/bin/node /nix/store/nh3zwzkz6wh6qa7bd2ywzr7irjij7j1i-firebase-tools-14.3.1/lib/node_modules/firebase-tools/lib/bin/firebase.js init hosting
-[debug] [2025-06-12T05:03:48.772Z] CLI Version:   14.3.1
-[debug] [2025-06-12T05:03:48.772Z] Platform:      linux
-[debug] [2025-06-12T05:03:48.772Z] Node Version:  v20.19.0
-[debug] [2025-06-12T05:03:48.772Z] Time:          Thu Jun 12 2025 05:03:48 GMT+0000 (Coordinated Universal Time)
-[debug] [2025-06-12T05:03:48.772Z] ----------------------------------------------------------------------
+[debug] [2025-06-12T05:08:27.168Z] ----------------------------------------------------------------------
+[debug] [2025-06-12T05:08:27.170Z] Command:       /nix/store/rbdrkcs5kkwpalxcd7c6bnm33lk2955n-nodejs-20.19.0/bin/node /nix/store/nh3zwzkz6wh6qa7bd2ywzr7irjij7j1i-firebase-tools-14.3.1/lib/node_modules/firebase-tools/lib/bin/firebase.js init hosting
+[debug] [2025-06-12T05:08:27.171Z] CLI Version:   14.3.1
+[debug] [2025-06-12T05:08:27.171Z] Platform:      linux
+[debug] [2025-06-12T05:08:27.171Z] Node Version:  v20.19.0
+[debug] [2025-06-12T05:08:27.171Z] Time:          Thu Jun 12 2025 05:08:27 GMT+0000 (Coordinated Universal Time)
+[debug] [2025-06-12T05:08:27.171Z] ----------------------------------------------------------------------
 [debug] 
-[debug] [2025-06-12T05:03:49.153Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
-[debug] [2025-06-12T05:03:49.154Z] > authorizing via signed-in user (shardgupta65@gmail.com)
+[debug] [2025-06-12T05:08:27.570Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-06-12T05:08:27.571Z] > authorizing via signed-in user (shardgupta65@gmail.com)
 [info] 
      ######## #### ########  ######## ########     ###     ######  ########
      ##        ##  ##     ## ##       ##     ##  ##   ##  ##       ##
@@ -30,29 +30,32 @@ Before we get started, keep in mind:
 [info] You can create multiple project aliases by running firebase use --add, 
 [info] but for now we'll just set up a default project.
 [info] 
-[debug] [2025-06-12T05:03:49.162Z] Using project from CLI flag: plant-care-disas-1731648684303
-[debug] [2025-06-12T05:03:49.164Z] No OAuth tokens found
-[debug] [2025-06-12T05:03:49.165Z] No OAuth tokens found
-[debug] [2025-06-12T05:03:49.165Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
-[debug] [2025-06-12T05:03:49.165Z] > authorizing via signed-in user (shardgupta65@gmail.com)
-[debug] [2025-06-12T05:03:49.169Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/plant-care-disas-1731648684303 [none]
-[debug] [2025-06-12T05:03:49.502Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/plant-care-disas-1731648684303 200
-[debug] [2025-06-12T05:03:49.503Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/plant-care-disas-1731648684303 {"projectId":"plant-care-disas-1731648684303","projectNumber":"351349559431","displayName":"plant care disaster","name":"projects/plant-care-disas-1731648684303","resources":{"hostingSite":"plant-care-disas-1731648684303"},"state":"ACTIVE","etag":"1_9a287224-8c3e-480e-bc6a-99c35aee94c9"}
+[debug] [2025-06-12T05:08:27.575Z] Using project from CLI flag: plant-care-disas-1731648684303
+[debug] [2025-06-12T05:08:27.577Z] No OAuth tokens found
+[debug] [2025-06-12T05:08:27.577Z] No OAuth tokens found
+[debug] [2025-06-12T05:08:27.577Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-06-12T05:08:27.577Z] > authorizing via signed-in user (shardgupta65@gmail.com)
+[debug] [2025-06-12T05:08:27.579Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/plant-care-disas-1731648684303 [none]
+[debug] [2025-06-12T05:08:27.865Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/plant-care-disas-1731648684303 200
+[debug] [2025-06-12T05:08:27.865Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/plant-care-disas-1731648684303 {"projectId":"plant-care-disas-1731648684303","projectNumber":"351349559431","displayName":"plant care disaster","name":"projects/plant-care-disas-1731648684303","resources":{"hostingSite":"plant-care-disas-1731648684303"},"state":"ACTIVE","etag":"1_9a287224-8c3e-480e-bc6a-99c35aee94c9"}
 [info] i  Using project plant-care-disas-1731648684303 (plant care disaster) 
 [info] 
 === Hosting Setup
-[debug] [2025-06-12T05:03:49.518Z] No OAuth tokens found
-[debug] [2025-06-12T05:03:49.518Z] No OAuth tokens found
-[debug] [2025-06-12T05:03:49.518Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
-[debug] [2025-06-12T05:03:49.518Z] > authorizing via signed-in user (shardgupta65@gmail.com)
-[debug] [2025-06-12T05:03:49.518Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/plant-care-disas-1731648684303 [none]
-[debug] [2025-06-12T05:03:49.730Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/plant-care-disas-1731648684303 200
-[debug] [2025-06-12T05:03:49.730Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/plant-care-disas-1731648684303 {"projectId":"plant-care-disas-1731648684303","projectNumber":"351349559431","displayName":"plant care disaster","name":"projects/plant-care-disas-1731648684303","resources":{"hostingSite":"plant-care-disas-1731648684303"},"state":"ACTIVE","etag":"1_9a287224-8c3e-480e-bc6a-99c35aee94c9"}
-[info] 
-[info] i  Detected a .git folder at /home/user/studio 
-[info] i  Authorizing with GitHub to upload your service account to a GitHub repository's secrets store. 
-[info] 
-[info] Visit this URL on this device to log in:
-[info] https://github.com/login/oauth/authorize?client_id=89cf50f02ac6aaed3484&state=889403361&redirect_uri=http%3A%2F%2Flocalhost%3A9005&scope=read%3Auser%20repo%20public_repo
-[info] 
-[info] Waiting for authentication...
+[debug] [2025-06-12T05:08:27.880Z] No OAuth tokens found
+[debug] [2025-06-12T05:08:27.880Z] No OAuth tokens found
+[debug] [2025-06-12T05:08:27.880Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-06-12T05:08:27.881Z] > authorizing via signed-in user (shardgupta65@gmail.com)
+[debug] [2025-06-12T05:08:27.881Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/plant-care-disas-1731648684303 [none]
+[debug] [2025-06-12T05:08:28.084Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/plant-care-disas-1731648684303 200
+[debug] [2025-06-12T05:08:28.085Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/plant-care-disas-1731648684303 {"projectId":"plant-care-disas-1731648684303","projectNumber":"351349559431","displayName":"plant care disaster","name":"projects/plant-care-disas-1731648684303","resources":{"hostingSite":"plant-care-disas-1731648684303"},"state":"ACTIVE","etag":"1_9a287224-8c3e-480e-bc6a-99c35aee94c9"}
+[debug] [2025-06-12T05:09:13.730Z] Error: Command failed: npx --yes create-next-app@"12 - 15.0" -e hello-world https://github.com/Sharadgup/echo-canvas.git --use-npm --ts
+    at genericNodeError (node:internal/errors:984:15)
+    at wrappedFn (node:internal/errors:538:14)
+    at checkExecSyncError (node:child_process:891:11)
+    at execSync (node:child_process:963:15)
+    at Object.init (/nix/store/nh3zwzkz6wh6qa7bd2ywzr7irjij7j1i-firebase-tools-14.3.1/lib/node_modules/firebase-tools/lib/frameworks/next/index.js:216:34)
+    at async doSetup (/nix/store/nh3zwzkz6wh6qa7bd2ywzr7irjij7j1i-firebase-tools-14.3.1/lib/node_modules/firebase-tools/lib/init/features/hosting/index.js:108:13)
+    at async init (/nix/store/nh3zwzkz6wh6qa7bd2ywzr7irjij7j1i-firebase-tools-14.3.1/lib/node_modules/firebase-tools/lib/init/index.js:41:9)
+    at async Command.initAction [as actionFn] (/nix/store/nh3zwzkz6wh6qa7bd2ywzr7irjij7j1i-firebase-tools-14.3.1/lib/node_modules/firebase-tools/lib/commands/init.js:187:5)
+[error] 
+[error] Error: An unexpected error has occurred.
