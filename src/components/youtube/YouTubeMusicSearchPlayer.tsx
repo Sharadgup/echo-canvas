@@ -2,10 +2,11 @@
 "use client";
 
 import { useState, FormEvent, useEffect, useRef, useCallback } from "react";
+import Image from "next/image"; // Added for thumbnail display
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Search as SearchIcon, Loader2, Youtube, Play, X, Music, Heart, Mic, MicOff, Globe, MapPin } from "lucide-react";
+import { Search as SearchIcon, Loader2, Play, X, Music, Heart, Mic, MicOff, Globe, MapPin } from "lucide-react";
 import SongCard from "@/components/playlist/SongCard";
 import { useToast } from "@/hooks/use-toast";
 import type { YouTubeMusicSearchResult, YouTubeMusicSearchResponse } from "@/app/actions/youtubeMusicActions";
@@ -21,7 +22,7 @@ type CategoryTab = "DISCOVER" | "INDIA" | "USA" | "GLOBAL_TRENDING" | "TRENDING_
 interface Country {
   name: string;
   queryTerm: string;
-  code?: string; // Optional: YouTube regionCode if we want to use it
+  code?: string;
 }
 
 const DEFAULT_DISCOVER_QUERY_TERM = "Top Music Hits";
@@ -62,7 +63,6 @@ export default function YouTubeMusicSearchPlayer() {
 
   const [selectedTrendingCountry, setSelectedTrendingCountry] = useState<Country | null>(null);
 
-  // Speech Recognition State
   const [isListening, setIsListening] = useState(false);
   const [speechRecognitionError, setSpeechRecognitionError] = useState<string | null>(null);
   const [isSpeechRecognitionSupported, setIsSpeechRecognitionSupported] = useState(false);
@@ -87,19 +87,18 @@ export default function YouTubeMusicSearchPlayer() {
 
     if (isNewQuery) {
       setIsLoading(true);
-      setYtResults([]); // Clear previous results for a new query
+      setYtResults([]); 
       setNextPageToken(undefined);
       setHasLoadedInitialDiscoverOrSearched(false);
     } else if (pageToken) { 
       setIsLoadMoreLoading(true);
     } else { 
-      // This case might be redundant if isNewQuery handles initial loads
       setIsLoading(true);
       setHasLoadedInitialDiscoverOrSearched(false);
     }
     
-    setCurrentApiQuery(query); // Keep track of the current base query
-    setCurrentApiRegion(region); // Keep track of the current region
+    setCurrentApiQuery(query); 
+    setCurrentApiRegion(region); 
 
     try {
       const response: YouTubeMusicSearchResponse = await searchYoutubeMusicAction(query, pageToken);
@@ -118,7 +117,6 @@ export default function YouTubeMusicSearchPlayer() {
     }
   }, [toast, activeTab, selectedTrendingCountry]);
   
-  // Effect for handling tab changes and initial load for category tabs
   useEffect(() => {
     let query = "";
     let title = "Music Explorer";
@@ -126,9 +124,9 @@ export default function YouTubeMusicSearchPlayer() {
     let doFetchInitial = true;
 
     if (activeTab !== "TRENDING_BY_COUNTRY") {
-        setSelectedTrendingCountry(null); // Clear selected country when leaving the tab
+        setSelectedTrendingCountry(null); 
     }
-    if (activeTab === "SEARCH" && ytSearchTerm.trim() === "") { // Don't auto-fetch for empty search
+    if (activeTab === "SEARCH" && ytSearchTerm.trim() === "") { 
         doFetchInitial = false;
     }
 
@@ -141,31 +139,27 @@ export default function YouTubeMusicSearchPlayer() {
         case "INDIA":
             query = INDIA_QUERY_TERM;
             title = "Top Indian Hits";
-            // region = "IN";
             break;
         case "USA":
             query = USA_QUERY_TERM;
             title = "Top USA Hits";
-            // region = "US";
             break;
         case "GLOBAL_TRENDING":
             query = GLOBAL_TRENDING_QUERY_TERM;
             title = "Global Trending Now";
             break;
         case "TRENDING_BY_COUNTRY":
-            // Fetching is deferred to country selection or selectedTrendingCountry effect
             title = selectedTrendingCountry ? `Trending in ${selectedTrendingCountry.name}` : "Trending by Country - Select a Country";
-            if (!selectedTrendingCountry) { // If no country selected, clear results, don't fetch
+            if (!selectedTrendingCountry) { 
                 setYtResults([]);
                 setNextPageToken(undefined);
                 setIsLoading(false);
                 setHasLoadedInitialDiscoverOrSearched(true);
             }
-            doFetchInitial = !!selectedTrendingCountry; // Fetch only if a country is already selected (e.g. on tab switch back)
+            doFetchInitial = !!selectedTrendingCountry; 
             if(selectedTrendingCountry) query = selectedTrendingCountry.queryTerm;
             break;
         case "SEARCH":
-             // Fetching is deferred to ytSearchTerm effect
             title = ytSearchTerm.trim() ? `Results for "${ytSearchTerm.trim()}"` : "Search for music";
              if (!ytSearchTerm.trim()) {
                 setYtResults([]);
@@ -183,10 +177,9 @@ export default function YouTubeMusicSearchPlayer() {
     if (doFetchInitial && query) {
         fetchMusic(query, region, undefined, true);
     }
-  }, [activeTab, fetchMusic]); // Removed selectedTrendingCountry & ytSearchTerm dependency here, they have their own effects
+  }, [activeTab, fetchMusic]); 
 
 
-  // Effect for search term changes specifically for the SEARCH tab
   useEffect(() => {
     if (activeTab === "SEARCH") {
       const searchTerm = ytSearchTerm.trim();
@@ -194,19 +187,18 @@ export default function YouTubeMusicSearchPlayer() {
         const handler = setTimeout(() => {
           setResultsTitle(`Results for "${searchTerm}"`);
           fetchMusic(searchTerm, undefined, undefined, true);
-        }, 500); // Debounce search
+        }, 500); 
         return () => clearTimeout(handler);
-      } else { // Handle clearing search term
+      } else { 
         setResultsTitle("Search for music");
         setYtResults([]);
         setNextPageToken(undefined);
-        setIsLoading(false); // Ensure loading is false
-        setHasLoadedInitialDiscoverOrSearched(true); // Treat as "searched" but empty
+        setIsLoading(false); 
+        setHasLoadedInitialDiscoverOrSearched(true); 
       }
     }
   }, [ytSearchTerm, activeTab, fetchMusic]);
 
-  // Effect for selected trending country
   useEffect(() => {
     if (activeTab === "TRENDING_BY_COUNTRY" && selectedTrendingCountry) {
       setResultsTitle(`Trending in ${selectedTrendingCountry.name}`);
@@ -215,13 +207,11 @@ export default function YouTubeMusicSearchPlayer() {
   }, [selectedTrendingCountry, activeTab, fetchMusic]);
 
 
-  // Effect for infinite scrolling
   useEffect(() => {
     if (observer.current) observer.current.disconnect();
 
     observer.current = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && nextPageToken && !isLoadMoreLoading && !isLoading) {
-        // Determine current query based on active tab and selections
         let queryForLoadMore = currentApiQuery;
         let regionForLoadMore = currentApiRegion;
 
@@ -232,8 +222,7 @@ export default function YouTubeMusicSearchPlayer() {
             queryForLoadMore = ytSearchTerm.trim();
             regionForLoadMore = undefined;
         }
-        // For other category tabs, currentApiQuery and currentApiRegion should be set correctly by their respective effects.
-
+        
         if (queryForLoadMore) {
            fetchMusic(queryForLoadMore, regionForLoadMore, nextPageToken);
         }
@@ -249,7 +238,6 @@ export default function YouTubeMusicSearchPlayer() {
   }, [nextPageToken, isLoadMoreLoading, isLoading, fetchMusic, activeTab, selectedTrendingCountry, ytSearchTerm, currentApiQuery, currentApiRegion]);
 
 
-  // Effect for Speech Recognition Initialization
   useEffect(() => {
     if (typeof window === 'undefined') {
         setSpeechSupportChecked(true);
@@ -317,11 +305,9 @@ export default function YouTubeMusicSearchPlayer() {
       setHasLoadedInitialDiscoverOrSearched(true);
       return;
     }
-    // If not already on search tab, switch to it. The useEffect for activeTab will handle title.
     if (activeTab !== "SEARCH") {
         setActiveTab("SEARCH");
     } else {
-      // If already on search tab, trigger fetch directly as activeTab won't change
       setResultsTitle(`Results for "${searchTerm}"`);
       fetchMusic(searchTerm, undefined, undefined, true); 
     }
@@ -371,7 +357,6 @@ export default function YouTubeMusicSearchPlayer() {
 
   const handleSelectTrendingCountry = (country: Country) => {
     setSelectedTrendingCountry(country);
-    // Fetching is handled by the useEffect watching selectedTrendingCountry & activeTab
   };
 
 
@@ -391,7 +376,7 @@ export default function YouTubeMusicSearchPlayer() {
       )}
 
       {!isLoading && ytResults.length === 0 && hasLoadedInitialDiscoverOrSearched && 
-       !(activeTab === "TRENDING_BY_COUNTRY" && !selectedTrendingCountry && !isLoading) && ( // Don't show "No results" if waiting for country selection
+       !(activeTab === "TRENDING_BY_COUNTRY" && !selectedTrendingCountry && !isLoading) && ( 
         <div className="text-center py-10 border-2 border-dashed border-muted-foreground/30 rounded-lg">
           <Music className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <p className="text-xl font-semibold text-muted-foreground">No YouTube Music results</p>
@@ -413,7 +398,7 @@ export default function YouTubeMusicSearchPlayer() {
               albumArtUrl={track.thumbnailUrl || `https://placehold.co/300x300.png?text=${encodeURIComponent(track.title.substring(0,10))}`}
               data-ai-hint="youtube music"
               onPlay={() => setCurrentPlayingYoutubeTrack(track)}
-              playButtonText="Play in App"
+              playButtonText="Play Audio"
               playButtonIcon={Play}
               isActive={currentPlayingYoutubeTrack?.videoId === track.videoId}
               onLike={() => handleLikeTrack(track)}
@@ -444,19 +429,28 @@ export default function YouTubeMusicSearchPlayer() {
                 </CardTitle>
                 <CardDescription>{currentPlayingYoutubeTrack.artist}</CardDescription>
             </CardHeader>
-            <CardContent>
-                <div className="aspect-video bg-muted rounded-md overflow-hidden shadow-inner">
+            <CardContent className="flex flex-col items-center">
+                {currentPlayingYoutubeTrack.thumbnailUrl && (
+                    <Image
+                        src={currentPlayingYoutubeTrack.thumbnailUrl.replace('mqdefault.jpg', 'hqdefault.jpg')}
+                        alt={`Thumbnail for ${currentPlayingYoutubeTrack.title}`}
+                        width={320}
+                        height={180}
+                        className="rounded-md shadow-md mb-4"
+                        data-ai-hint="music video thumbnail"
+                        priority={true} // Prioritize loading the current playing track's thumbnail
+                    />
+                )}
                 <iframe
-                    width="100%"
-                    height="100%"
+                    key={currentPlayingYoutubeTrack.videoId} // Important: forces iframe to re-render on song change
+                    width="0"
+                    height="0"
+                    style={{ position: 'absolute', top: '-9999px', left: '-9999px', border: 'none' }}
                     src={`https://www.youtube.com/embed/${currentPlayingYoutubeTrack.videoId}?autoplay=1&enablejsapi=1&origin=${typeof window !== 'undefined' ? window.location.origin : ''}`}
-                    title="YouTube video player"
-                    frameBorder="0"
+                    title="YouTube audio player (hidden)"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                    allowFullScreen
-                    className="rounded-md"
                 ></iframe>
-                </div>
+                <p className="text-sm text-muted-foreground mt-2">Audio is playing. Close player with 'X' above to stop.</p>
             </CardContent>
             </Card>
             <YouTubeLyricsDisplay 
@@ -468,7 +462,7 @@ export default function YouTubeMusicSearchPlayer() {
 
       <Card className="shadow-md">
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 border-b rounded-t-lg bg-card p-0">
+           <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 border-b rounded-t-lg bg-card p-0">
             <TabsTrigger value="DISCOVER" className="rounded-tl-lg data-[state=active]:shadow-none data-[state=active]:border-b-transparent"><Globe className="mr-1 h-4 w-4 sm:hidden md:inline-block" />Discover</TabsTrigger>
             <TabsTrigger value="INDIA" className="data-[state=active]:shadow-none data-[state=active]:border-b-transparent"><MapPin className="mr-1 h-4 w-4 sm:hidden md:inline-block" />India</TabsTrigger>
             <TabsTrigger value="USA" className="data-[state=active]:shadow-none data-[state=active]:border-b-transparent"><MapPin className="mr-1 h-4 w-4 sm:hidden md:inline-block" />USA</TabsTrigger>
@@ -492,7 +486,7 @@ export default function YouTubeMusicSearchPlayer() {
           <TabsContent value="TRENDING_BY_COUNTRY" className="p-4 md:p-6 mt-0 space-y-4">
             <div>
               <h4 className="font-semibold text-lg mb-3">Select a Country:</h4>
-              <ScrollArea className="h-auto max-h-[150px] sm:max-h-[200px] w-full"> {/* Added ScrollArea for many countries */}
+              <ScrollArea className="h-auto max-h-[150px] sm:max-h-[200px] w-full"> 
                 <div className="flex flex-wrap gap-2">
                   {trendingCountries.map((country) => (
                     <Button
@@ -570,3 +564,4 @@ export default function YouTubeMusicSearchPlayer() {
   );
 }
 
+    
