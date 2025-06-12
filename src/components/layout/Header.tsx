@@ -7,18 +7,18 @@ import { useAuthContext } from '@/context/AuthContext';
 import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { Menu, Music, User, LogIn, LogOut, Search as SearchIcon, ListMusic, GitBranch, SlidersHorizontal, LayoutDashboard, Sun, Moon } from 'lucide-react'; // Added Sun, Moon
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'; // Added SheetHeader, SheetTitle
+import { Menu, Music, User, LogIn, LogOut, Search as SearchIcon, ListMusic, GitBranch, SlidersHorizontal, LayoutDashboard, Sun, Moon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useState } from 'react'; 
-import { useTheme } from '@/context/ThemeContext'; // Added
+import { useState } from 'react';
+import { useTheme } from '@/context/ThemeContext';
 
 export default function Header() {
   const { user, loading, isUserProcessing, setIsUserProcessing } = useAuthContext();
   const router = useRouter();
   const { toast } = useToast();
   const [isSheetOpen, setIsSheetOpen] = useState(false);
-  const { theme, toggleTheme } = useTheme(); // Added theme context
+  const { theme, toggleTheme } = useTheme();
 
   const handleLogout = async () => {
     setIsUserProcessing(true);
@@ -98,7 +98,7 @@ export default function Header() {
   );
 
 
-  if (loading) return null; 
+  if (loading) return null;
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -107,8 +107,8 @@ export default function Header() {
           <Music className="h-6 w-6" />
           <span className="font-headline">Echo Canvas</span>
         </Link>
-        
-        <div className="hidden md:flex items-center space-x-1"> {/* Adjusted space for new button */}
+
+        <div className="hidden md:flex items-center space-x-1">
           <NavContent />
         </div>
 
@@ -121,7 +121,10 @@ export default function Header() {
               </Button>
             </SheetTrigger>
             <SheetContent side="right">
-              <nav className="flex flex-col space-y-2 pt-6"> {/* Adjusted space-y */}
+              <SheetHeader>
+                <SheetTitle>Navigation</SheetTitle>
+              </SheetHeader>
+              <nav className="flex flex-col space-y-2 mt-4">
                 <NavContent mobile />
               </nav>
             </SheetContent>
