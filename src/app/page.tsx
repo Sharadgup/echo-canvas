@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useAuthContext } from "@/context/AuthContext";
@@ -28,6 +29,7 @@ export default function HomePage() {
           height={200} 
           className="rounded-lg shadow-xl"
           data-ai-hint="abstract music"
+          priority 
         />
       </div>
       <h1 className="text-5xl font-bold font-headline mb-6 text-primary">

@@ -75,6 +75,8 @@ export default function LoginPage() {
         toast({ title: "Google Login Canceled", description: "You closed the Google Sign-In window before completing the process.", variant: "default" });
       } else if (error.code === 'auth/cancelled-popup-request') {
         toast({ title: "Google Login Canceled", description: "Multiple Google Sign-In windows were opened. Please try again.", variant: "default" });
+      } else if (error.code === 'auth/popup-blocked') {
+        toast({ title: "Google Login Blocked", description: "Your browser blocked the Google Sign-In popup. Please disable your popup blocker for this site and try again.", variant: "destructive" });
       }
       else {
         toast({ title: "Google Login Failed", description: error.message || "Could not sign in with Google. Please try again.", variant: "destructive" });

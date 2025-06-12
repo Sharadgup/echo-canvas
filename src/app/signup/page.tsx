@@ -74,6 +74,8 @@ export default function SignupPage() {
         toast({ title: "Google Signup Canceled", description: "You closed the Google Sign-Up window before completing the process.", variant: "default" });
       } else if (error.code === 'auth/cancelled-popup-request') {
         toast({ title: "Google Signup Canceled", description: "Multiple Google Sign-Up windows were opened. Please try again.", variant: "default" });
+      } else if (error.code === 'auth/popup-blocked') {
+        toast({ title: "Google Signup Blocked", description: "Your browser blocked the Google Sign-Up popup. Please disable your popup blocker for this site and try again.", variant: "destructive" });
       }
       else {
         toast({ title: "Google Signup Failed", description: error.message || "Could not sign up with Google. Please try again.", variant: "destructive" });
