@@ -5,13 +5,15 @@ import { useState, FormEvent, useEffect, useRef, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Search as SearchIcon, Loader2, Youtube, Play, X, Music, Heart } from "lucide-react";
+import { Search as SearchIcon, Loader2, Youtube, Play, X, Music, Heart, Mic, MicOff } from "lucide-react";
 import SongCard from "@/components/playlist/SongCard";
 import { useToast } from "@/hooks/use-toast";
 import type { YouTubeMusicSearchResult, YouTubeMusicSearchResponse } from "@/app/actions/youtubeMusicActions";
 import { searchYoutubeMusicAction } from "@/app/actions/youtubeMusicActions";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import YouTubeLyricsDisplay from "./YouTubeLyricsDisplay"; // Added import
+import YouTubeLyricsDisplay from "./YouTubeLyricsDisplay";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
 
 type CategoryTab = "DISCOVER" | "INDIA" | "USA" | "SEARCH";
 
@@ -37,17 +39,32 @@ export default function YouTubeMusicSearchPlayer() {
   const [likedTracks, setLikedTracks] = useState<Set<string>>(new Set());
   const [nextPageToken, setNextPageToken] = useState<string | undefined>(undefined);
 
+  // Speech Recognition State
+  const [isListening, setIsListening] = useState(false);
+  const [speechRecognitionError, setSpeechRecognitionError] = useState<string | null>(null);
+  const [isSpeechRecognitionSupported, setIsSpeechRecognitionSupported] = useState(false);
+  const [speechSupportChecked, setSpeechSupportChecked] = useState(false);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+
+
   const { toast } = useToast();
   const observer = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   const fetchMusic = useCallback(async (query: string, region?: string, pageToken?: string, isNewQuery: boolean = false) => {
+    if (!query && activeTab === "SEARCH") { // Prevent fetching if search query is empty for search tab
+        setYtResults([]);
+        setNextPageToken(undefined);
+        setIsLoading(false);
+        setHasLoadedInitialDiscoverOrSearched(true);
+        setResultsTitle("Search for music");
+        return;
+    }
+
     if (isNewQuery) {
       setIsLoading(true);
       setYtResults([]);
       setNextPageToken(undefined);
-      // Keep currentPlayingYoutubeTrack if user is just switching tabs/re-searching same category
-      // setCurrentPlayingYoutubeTrack(null); 
       setHasLoadedInitialDiscoverOrSearched(false);
     } else if (pageToken) { 
       setIsLoadMoreLoading(true);
@@ -60,13 +77,13 @@ export default function YouTubeMusicSearchPlayer() {
     setCurrentApiRegion(region);
 
     try {
-      const response: YouTubeMusicSearchResponse = await searchYoutubeMusicAction(query, pageToken, region);
+      const response: YouTubeMusicSearchResponse = await searchYoutubeMusicAction(query, pageToken); // Removed region from action call signature based on its definition
       
       setYtResults(prevResults => (isNewQuery || !pageToken) ? response.results : [...prevResults, ...response.results]);
       setNextPageToken(response.nextPageToken);
 
       if (isNewQuery && !pageToken && activeTab === "SEARCH" && query) {
-        toast({ title: "YouTube Music Search Complete", description: `Found ${response.results.length} tracks for "${query}".` });
+        // Toast for search completion is now handled by handleYoutubeMusicSearchSubmit
       }
       setHasLoadedInitialDiscoverOrSearched(true);
 
@@ -78,45 +95,67 @@ export default function YouTubeMusicSearchPlayer() {
       setIsLoading(false);
       setIsLoadMoreLoading(false);
     }
-  }, [toast, activeTab]);
+  }, [toast, activeTab]); // Removed region from action call based on provided files
   
-  useEffect(() => {
+  // Effect for handling tab changes and initial load for category tabs
+   useEffect(() => {
     let query = DEFAULT_DISCOVER_QUERY_TERM;
-    let region: string | undefined = "US";
+    let region: string | undefined = "US"; // Region is not directly used by searchYoutubeMusicAction per its definition
     let title = "Discover Music";
 
     if (activeTab === "INDIA") {
       query = INDIA_QUERY_TERM;
-      region = "IN";
+      // region = "IN"; // Not used by current searchYoutubeMusicAction
       title = "Top Indian Hits";
+       fetchMusic(query, undefined, undefined, true);
+       setResultsTitle(title);
     } else if (activeTab === "USA") {
       query = USA_QUERY_TERM;
-      region = "US";
+      // region = "US"; // Not used by current searchYoutubeMusicAction
       title = "Top USA Hits";
+       fetchMusic(query, undefined, undefined, true);
+       setResultsTitle(title);
+    } else if (activeTab === "DISCOVER") {
+        fetchMusic(query, undefined, undefined, true);
+        setResultsTitle(title);
     } else if (activeTab === "SEARCH") {
+      // For SEARCH tab, fetching is triggered by ytSearchTerm change or form submission
       if (ytSearchTerm.trim()) {
-        query = ytSearchTerm.trim();
-        region = undefined; 
-        title = `Results for "${ytSearchTerm.trim()}"`;
+        setResultsTitle(`Results for "${ytSearchTerm.trim()}"`);
+        fetchMusic(ytSearchTerm.trim(), undefined, undefined, true);
       } else {
-        setYtResults([]); 
+        setYtResults([]);
         setNextPageToken(undefined);
-        setIsLoading(false); 
+        setIsLoading(false);
         setResultsTitle("Search for music");
-        setHasLoadedInitialDiscoverOrSearched(true); 
-        return; 
+        setHasLoadedInitialDiscoverOrSearched(true);
       }
     }
-    
-    setResultsTitle(title);
-    fetchMusic(query, region, undefined, true); 
-  }, [activeTab, fetchMusic]); // ytSearchTerm removed, handled by search submission
+  }, [activeTab, fetchMusic]); // ytSearchTerm removed, handled by its own effect or submit
 
+  // Effect for search term changes specifically for the SEARCH tab
+  useEffect(() => {
+    if (activeTab === "SEARCH" && ytSearchTerm.trim()) {
+      const handler = setTimeout(() => {
+        setResultsTitle(`Results for "${ytSearchTerm.trim()}"`);
+        fetchMusic(ytSearchTerm.trim(), undefined, undefined, true);
+      }, 500); // Debounce search
+      return () => clearTimeout(handler);
+    } else if (activeTab === "SEARCH" && !ytSearchTerm.trim()) {
+        setResultsTitle("Search for music");
+        setYtResults([]);
+        setNextPageToken(undefined);
+    }
+  }, [ytSearchTerm, activeTab, fetchMusic]);
+
+
+  // Effect for infinite scrolling
   useEffect(() => {
     if (observer.current) observer.current.disconnect();
 
     observer.current = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && nextPageToken && !isLoadMoreLoading && !isLoading) {
+        // Pass currentApiQuery and currentApiRegion if your fetchMusic needs it for pagination
         fetchMusic(currentApiQuery, currentApiRegion, nextPageToken);
       }
     });
@@ -129,20 +168,82 @@ export default function YouTubeMusicSearchPlayer() {
     };
   }, [nextPageToken, isLoadMoreLoading, isLoading, currentApiQuery, currentApiRegion, fetchMusic]);
 
+
+  // Effect for Speech Recognition Initialization
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+        setSpeechSupportChecked(true);
+        return;
+    }
+
+    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognitionAPI) {
+      setIsSpeechRecognitionSupported(true);
+      const newRecognition = new SpeechRecognitionAPI();
+      newRecognition.continuous = false;
+      newRecognition.interimResults = false;
+      newRecognition.lang = 'en-US';
+
+      newRecognition.onresult = (event: SpeechRecognitionEvent) => {
+        const transcript = event.results[0][0].transcript.trim();
+        setYtSearchTerm(transcript); // Update input, which will trigger search useEffect if on SEARCH tab
+
+        if (transcript) {
+          if (activeTab !== "SEARCH") {
+            setActiveTab("SEARCH"); // Switch to search tab, useEffect for activeTab/ytSearchTerm will handle fetch
+          }
+          // If already on SEARCH tab, the change in ytSearchTerm will trigger its dedicated useEffect.
+        }
+        setIsListening(false);
+      };
+
+      newRecognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+        let errorMsg = 'Speech recognition error.';
+        if (event.error === 'no-speech') {
+          errorMsg = 'No speech was detected. Please try again.';
+        } else if (event.error === 'audio-capture') {
+          errorMsg = 'Microphone problem. Please ensure it is connected and enabled.';
+        } else if (event.error === 'not-allowed') {
+          errorMsg = 'Microphone access denied. Please allow microphone access in your browser settings.';
+        }
+        setSpeechRecognitionError(errorMsg);
+        toast({ title: "Speech Recognition Error", description: errorMsg, variant: "destructive" });
+        setIsListening(false);
+      };
+
+      newRecognition.onend = () => {
+        setIsListening(false);
+      };
+      
+      recognitionRef.current = newRecognition;
+    } else {
+      setIsSpeechRecognitionSupported(false);
+    }
+    setSpeechSupportChecked(true);
+
+    return () => {
+      recognitionRef.current?.abort(); // Use abort for more immediate stop
+    };
+  }, [toast, setYtSearchTerm, activeTab, setActiveTab]); // Removed fetchMusic, setResultsTitle to rely on other effects
+
+
   const handleYoutubeMusicSearchSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const searchTerm = ytSearchTerm.trim();
     if (!searchTerm) {
       toast({ title: "Empty Search", description: "Please enter a song or artist to search."});
-      setResultsTitle("Search for music"); // Reset title for empty search
+      setResultsTitle("Search for music"); 
       setYtResults([]);
       setNextPageToken(undefined);
       setHasLoadedInitialDiscoverOrSearched(true);
       return;
     }
+    setActiveTab("SEARCH"); // Ensure we are on search tab
     setResultsTitle(`Results for "${searchTerm}"`);
     fetchMusic(searchTerm, undefined, undefined, true); 
+    toast({ title: "YouTube Music Search Initiated", description: `Searching for "${searchTerm}".` });
   };
+
 
   const handleLikeTrack = (track: YouTubeMusicSearchResult) => {
     setLikedTracks(prevLikedTracks => {
@@ -160,10 +261,33 @@ export default function YouTubeMusicSearchPlayer() {
 
   const handleTabChange = (value: string) => {
     setActiveTab(value as CategoryTab);
-    if (value !== "SEARCH") {
-        setYtSearchTerm(""); 
+    // if (value !== "SEARCH") {
+    //     setYtSearchTerm(""); // Clear search term when switching away from search tab
+    // }
+  };
+
+  const handleToggleListening = () => {
+    if (!isSpeechRecognitionSupported || !recognitionRef.current) {
+      toast({ title: "Unsupported", description: "Speech recognition is not supported in your browser.", variant: "default" });
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      setSpeechRecognitionError(null);
+      try {
+        recognitionRef.current.start();
+        setIsListening(true);
+      } catch (e) {
+        console.error("Error starting speech recognition:", e);
+        toast({ title: "Error", description: "Could not start speech recognition. Try again.", variant: "destructive" });
+        setIsListening(false);
+      }
     }
   };
+
 
   const ResultsSection = () => (
     <>
@@ -185,7 +309,7 @@ export default function YouTubeMusicSearchPlayer() {
           <Music className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <p className="text-xl font-semibold text-muted-foreground">No YouTube Music results</p>
           <p className="text-sm text-muted-foreground">
-            {activeTab === "SEARCH" && currentApiQuery ? `No results found for "${currentApiQuery}".` : "Try a different category or search term."}
+            {activeTab === "SEARCH" && currentApiQuery ? `No results found for "${currentApiQuery}". Try a different term.` : "Try a different category or search term."}
           </p>
         </div>
       )}
@@ -198,7 +322,7 @@ export default function YouTubeMusicSearchPlayer() {
               title={track.title}
               artist={track.artist}
               albumArtUrl={track.thumbnailUrl || `https://placehold.co/300x300.png?text=${encodeURIComponent(track.title.substring(0,10))}`}
-              data-ai-hint="youtube music thumbnail"
+              data-ai-hint="youtube music"
               onPlay={() => setCurrentPlayingYoutubeTrack(track)}
               playButtonText="Play in App"
               playButtonIcon={Play}
@@ -220,7 +344,7 @@ export default function YouTubeMusicSearchPlayer() {
   return (
     <div className="space-y-6">
       {currentPlayingYoutubeTrack && (
-        <div className="sticky top-[70px] z-20 space-y-4"> {/* Adjusted top for header height */}
+        <div className="sticky top-[70px] z-20 space-y-4"> 
             <Card className="shadow-lg border-primary bg-background/95 backdrop-blur-sm">
             <CardHeader>
                 <CardTitle className="flex justify-between items-center text-lg font-headline">
@@ -272,19 +396,49 @@ export default function YouTubeMusicSearchPlayer() {
             <ResultsSection />
           </TabsContent>
           <TabsContent value="SEARCH" className="p-4 md:p-6 mt-0">
-            <form onSubmit={handleYoutubeMusicSearchSubmit} className="flex gap-2 mb-6">
+            <form onSubmit={handleYoutubeMusicSearchSubmit} className="flex gap-2 mb-6 items-center">
               <Input
                 type="search"
-                placeholder="Enter song or artist..."
+                placeholder="Enter song or artist, or use mic..."
                 value={ytSearchTerm}
                 onChange={(e) => setYtSearchTerm(e.target.value)}
                 className="flex-grow"
+                aria-label="Search YouTube Music"
               />
+              {isSpeechRecognitionSupported && (
+                <Button
+                  type="button"
+                  onClick={handleToggleListening}
+                  variant={isListening ? "destructive" : "outline"}
+                  size="icon"
+                  aria-label={isListening ? "Stop listening" : "Start voice search"}
+                  title={isListening ? "Stop listening" : "Start voice search"}
+                  disabled={!isSpeechRecognitionSupported} 
+                >
+                  {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+                </Button>
+              )}
               <Button type="submit" disabled={isLoading && activeTab === 'SEARCH'} variant="default">
                 {isLoading && activeTab === 'SEARCH' ? <Loader2 className="h-4 w-4 animate-spin" /> : <SearchIcon className="h-4 w-4" />}
                 <span className="ml-2 hidden sm:inline">Search</span>
               </Button>
             </form>
+            {speechSupportChecked && !isSpeechRecognitionSupported && (
+              <Alert variant="default" className="mt-2 mb-4">
+                 <Mic className="h-4 w-4" />
+                <AlertTitle>Voice Search Not Available</AlertTitle>
+                <AlertDescription>
+                  Speech recognition is not supported by your browser. For voice search, please try using Chrome or Edge.
+                </AlertDescription>
+              </Alert>
+            )}
+            {speechRecognitionError && (
+              <Alert variant="destructive" className="mt-2 mb-4">
+                 <MicOff className="h-4 w-4" />
+                <AlertTitle>Voice Search Error</AlertTitle>
+                <AlertDescription>{speechRecognitionError}</AlertDescription>
+              </Alert>
+            )}
             <ResultsSection />
           </TabsContent>
         </Tabs>
@@ -292,5 +446,3 @@ export default function YouTubeMusicSearchPlayer() {
     </div>
   );
 }
-
-    
