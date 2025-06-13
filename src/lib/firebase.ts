@@ -1,8 +1,20 @@
 
-import { initializeApp, getApps, getApp, FirebaseApp, FirebaseOptions } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, Auth } from 'firebase/auth';
-import { getFirestore, collection, query, where, getDocs, addDoc, serverTimestamp, Timestamp, Firestore } from 'firebase/firestore';
-import { getStorage, FirebaseStorage } from 'firebase/storage';
+import { initializeApp, getApps, getApp, type FirebaseApp, type FirebaseOptions } from 'firebase/app';
+import { getAuth, GoogleAuthProvider, type Auth } from 'firebase/auth';
+import { 
+  getFirestore, 
+  collection, 
+  query, 
+  where, 
+  getDocs, 
+  addDoc, 
+  serverTimestamp, 
+  Timestamp, 
+  type Firestore, 
+  doc,  // Ensured doc is imported
+  deleteDoc // Ensured deleteDoc is imported
+} from 'firebase/firestore';
+import { getStorage, type FirebaseStorage } from 'firebase/storage';
 
 const firebaseConfig: FirebaseOptions = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -24,6 +36,10 @@ console.log("Attempting to initialize Firebase...");
 console.log(`NEXT_PUBLIC_FIREBASE_API_KEY: ${process.env.NEXT_PUBLIC_FIREBASE_API_KEY ? '****** (set)' : 'MISSING!'}`);
 console.log(`NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || 'MISSING!'}`);
 console.log(`NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'MISSING!'}`);
+console.log(`NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || '(optional, not checked for critical path)'}`);
+console.log(`NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '(optional, not checked for critical path)'}`);
+console.log(`NEXT_PUBLIC_FIREBASE_APP_ID: ${process.env.NEXT_PUBLIC_FIREBASE_APP_ID || '(optional, not checked for critical path)'}`);
+
 
 const essentialConfigValuesPresent =
   firebaseConfig.apiKey &&
@@ -69,7 +85,6 @@ if (essentialConfigValuesPresent) {
             `Firebase services (Auth, Firestore, Storage) will be unavailable. ` +
             `Error code: ${error.code}, Message: ${error.message}`
         );
-        // Reset services to undefined if they fail to initialize after app init
         auth = undefined;
         googleProvider = undefined;
         db = undefined;
@@ -96,6 +111,8 @@ export {
   where,
   getDocs,
   addDoc,
+  doc, // Ensured doc is exported
+  deleteDoc, // Ensured deleteDoc is exported
   serverTimestamp,
   Timestamp
 };
