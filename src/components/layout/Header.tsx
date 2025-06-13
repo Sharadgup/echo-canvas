@@ -8,7 +8,7 @@ import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'; // Added SheetHeader, SheetTitle
-import { Menu, Music, User, LogIn, LogOut, Search as SearchIcon, ListMusic, GitBranch, SlidersHorizontal, LayoutDashboard, Sun, Moon } from 'lucide-react';
+import { Menu, Music, User, LogIn, LogOut, Search as SearchIcon, SlidersHorizontal, LayoutDashboard, Sun, Moon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 import { useTheme } from '@/context/ThemeContext';
@@ -37,8 +37,6 @@ export default function Header() {
 
   const navLinks = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/playlist', label: 'Playlist', icon: ListMusic },
-    { href: '/visualizer', label: 'Visualizer', icon: GitBranch },
     { href: '/search', label: 'Search', icon: SearchIcon },
     { href: '/mixer', label: 'Mixer', icon: SlidersHorizontal },
   ];
