@@ -28,6 +28,7 @@ interface TrackCardDashboardProps {
 export default function TrackCardDashboard({ song }: TrackCardDashboardProps) {
   const [isLoadingAi, setIsLoadingAi] = useState(false);
   const [aiSuggestion, setAiSuggestion] = useState<RemixSuggestion | null>(null);
+  const [aiSuggestionError, setAiSuggestionError] = useState<string | null>(null);
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
@@ -40,22 +41,46 @@ export default function TrackCardDashboard({ song }: TrackCardDashboardProps) {
   const handleGetAiSuggestion = async () => {
     setIsLoadingAi(true);
     setAiSuggestion(null);
-    setIsDialogOpen(true); 
+    setAiSuggestionError(null); // Reset error state
+    setIsDialogOpen(true);
     try {
-      const suggestion = await suggestRemixStyleAction({ 
-        title: song.title, 
+      const result = await suggestRemixStyleAction({
+        title: song.title,
         artist: song.artist,
         // We could add current style/genre if we stored it
       });
-      setAiSuggestion(suggestion);
-    } catch (error) {
-      console.error("Error getting AI suggestion:", error);
+
+      if (result && 'error' in result && result.error === true) {
+        console.error("AI Suggestion Failed (handled):", result.message);
+        const errorMessage = result.message || "Could not get a remix suggestion. Please try again.";
+        toast({
+          title: "AI Suggestion Failed",
+          description: errorMessage,
+          variant: "destructive",
+        });
+        setAiSuggestionError(errorMessage);
+      } else if (result) {
+        setAiSuggestion(result as RemixSuggestion); // Type assertion, as 'error' in result is false or not present
+        setAiSuggestionError(null);
+      } else {
+        // Handle unexpected null/undefined result from action
+        const genericErrorMsg = "Received an unexpected empty response from the AI suggestion service.";
+         toast({
+          title: "AI Suggestion Failed",
+          description: genericErrorMsg,
+          variant: "destructive",
+        });
+        setAiSuggestionError(genericErrorMsg);
+      }
+    } catch (error: any) { // Catch unexpected network errors or if the action itself throws before returning ActionError
+      console.error("Error calling AI suggestion action:", error);
+      const networkErrorMsg = "An unexpected network error occurred while fetching AI suggestions. Please check your connection and try again.";
       toast({
-        title: "AI Suggestion Failed",
-        description: "Could not get a remix suggestion. Please try again.",
+        title: "Network Error",
+        description: networkErrorMsg,
         variant: "destructive",
       });
-      setIsDialogOpen(false); // Close dialog on error
+      setAiSuggestionError(networkErrorMsg);
     } finally {
       setIsLoadingAi(false);
     }
@@ -86,10 +111,17 @@ export default function TrackCardDashboard({ song }: TrackCardDashboardProps) {
         <Button variant="outline" onClick={handlePlay} className="w-full sm:w-auto flex-grow">
           <PlayCircle className="mr-2 h-5 w-5" /> Play
         </Button>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={(open) => {
+          setIsDialogOpen(open);
+          if (!open) { // Reset states when dialog is closed
+            setAiSuggestion(null);
+            setAiSuggestionError(null);
+            setIsLoadingAi(false);
+          }
+        }}>
           <DialogTrigger asChild>
-            <Button variant="secondary" onClick={handleGetAiSuggestion} className="w-full sm:w-auto flex-grow" disabled={isLoadingAi}>
-              {isLoadingAi && !aiSuggestion ? (
+            <Button variant="secondary" onClick={handleGetAiSuggestion} className="w-full sm:w-auto flex-grow" disabled={isLoadingAi && isDialogOpen}>
+              {(isLoadingAi && isDialogOpen) ? (
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
               ) : (
                 <Lightbulb className="mr-2 h-5 w-5" />
@@ -107,14 +139,17 @@ export default function TrackCardDashboard({ song }: TrackCardDashboardProps) {
                 Let our AI spark your creativity with new remix ideas!
               </DialogDescription>
             </DialogHeader>
-            <div className="py-4 space-y-3 max-h-[60vh] overflow-y-auto">
-              {isLoadingAi && !aiSuggestion && (
+            <div className="py-4 space-y-3 max-h-[60vh] overflow-y-auto min-h-[100px]">
+              {isLoadingAi && (
                 <div className="flex flex-col items-center justify-center p-6">
                   <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
                   <p className="text-muted-foreground">Generating ideas...</p>
                 </div>
               )}
-              {aiSuggestion && (
+              {!isLoadingAi && aiSuggestionError && (
+                 <p className="text-sm text-destructive text-center p-4">{aiSuggestionError}</p>
+              )}
+              {!isLoadingAi && !aiSuggestionError && aiSuggestion && (
                 <div className="space-y-4">
                   <div>
                     <h4 className="font-semibold text-primary">Suggested Style:</h4>
@@ -134,8 +169,8 @@ export default function TrackCardDashboard({ song }: TrackCardDashboardProps) {
                   </div>
                 </div>
               )}
-              {!isLoadingAi && !aiSuggestion && error && (
-                 <p className="text-sm text-destructive">Failed to load suggestion.</p>
+               {!isLoadingAi && !aiSuggestionError && !aiSuggestion && (
+                <p className="text-sm text-muted-foreground text-center p-4">AI suggestion will appear here.</p>
               )}
             </div>
             <DialogFooter>
