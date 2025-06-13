@@ -22,14 +22,14 @@ export default function HomePage() {
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)] text-center p-4">
       <div className="mb-8">
-        <Image 
-          src="https://placehold.co/600x400.png" 
-          alt="Person enjoying music with headphones and visual sound waves" 
-          width={450} 
-          height={300} 
+        <Image
+          src="https://placehold.co/600x400.png"
+          alt="Person enjoying music with headphones and visual sound waves"
+          width={600}
+          height={400}
           className="rounded-lg shadow-xl"
           data-ai-hint="headphones music"
-          priority 
+          priority
         />
       </div>
       <h1 className="text-5xl font-bold font-headline mb-6 text-primary">
@@ -46,13 +46,13 @@ export default function HomePage() {
           </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Button asChild size="lg" className="shadow-md hover:shadow-lg transition-shadow">
-              <Link href="/playlist" className="flex items-center justify-center">
-                <Disc3 className="mr-2 h-5 w-5" /> My Playlists
+              <Link href="/dashboard" className="flex items-center justify-center">
+                <Disc3 className="mr-2 h-5 w-5" /> My Dashboard
               </Link>
             </Button>
             <Button asChild size="lg" variant="outline" className="shadow-md hover:shadow-lg transition-shadow">
-              <Link href="/visualizer" className="flex items-center justify-center">
-                <Music className="mr-2 h-5 w-5" /> Music Visualizer
+              <Link href="/my-music" className="flex items-center justify-center">
+                <Music className="mr-2 h-5 w-5" /> My Music
               </Link>
             </Button>
              <Button asChild size="lg" variant="secondary" className="shadow-md hover:shadow-lg transition-shadow">
@@ -81,14 +81,14 @@ export default function HomePage() {
           </div>
         </div>
       )}
-      
+
       <div className="mt-16 p-6 border rounded-lg shadow-lg bg-card max-w-3xl">
         <h2 className="text-2xl font-semibold mb-3 font-headline text-accent">How It Works</h2>
         <ol className="list-decimal list-inside space-y-2 text-left text-card-foreground">
-          <li><strong className="text-primary">Describe Your Vibe:</strong> Tell our AI about your music taste.</li>
-          <li><strong className="text-primary">Get Curated Playlists:</strong> Instantly receive a personalized playlist.</li>
-          <li><strong className="text-primary">Dynamic Visuals:</strong> Watch your music come alive with stunning visualizations.</li>
-          <li><strong className="text-primary">Discover More:</strong> Let our AI suggest the perfect next song.</li>
+          <li><strong className="text-primary">Record or Describe:</strong> Use your voice, a sound, or describe your music taste.</li>
+          <li><strong className="text-primary">AI Analysis & Search:</strong> Our AI understands your input and finds matching music.</li>
+          <li><strong className="text-primary">Curated Results:</strong> Get personalized song suggestions and YouTube results.</li>
+          <li><strong className="text-primary">Like & Collect:</strong> Save your favorite tracks to "My Music".</li>
         </ol>
       </div>
     </div>
