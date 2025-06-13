@@ -15,6 +15,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import YouTubeLyricsDisplay from "./YouTubeLyricsDisplay";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useAuthContext } from "@/context/AuthContext";
+import { toggleLikeSongAction, getLikedSongIdsAction, type LikedSong } from "@/app/actions/likedMusicActions";
 
 
 type CategoryTab = "DISCOVER" | "INDIA" | "USA" | "GLOBAL_TRENDING" | "TRENDING_BY_COUNTRY" | "SEARCH";
@@ -45,6 +47,7 @@ const trendingCountries: Country[] = [
 ];
 
 export default function YouTubeMusicSearchPlayer() {
+  const { user } = useAuthContext();
   const [ytSearchTerm, setYtSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState<CategoryTab>("DISCOVER");
 
@@ -54,12 +57,12 @@ export default function YouTubeMusicSearchPlayer() {
   const [ytResults, setYtResults] = useState<YouTubeMusicSearchResult[]>([]);
   const [resultsTitle, setResultsTitle] = useState<string>("Discover Music");
 
-  const [isLoading, setIsLoading] = useState(true); // Loading for main results
+  const [isLoading, setIsLoading] = useState(true); 
   const [isLoadMoreLoading, setIsLoadMoreLoading] = useState(false);
   const [hasLoadedInitialDiscoverOrSearched, setHasLoadedInitialDiscoverOrSearched] = useState(false);
 
   const [currentPlayingYoutubeTrack, setCurrentPlayingYoutubeTrack] = useState<YouTubeMusicSearchResult | null>(null);
-  const [likedTracks, setLikedTracks] = useState<Set<string>>(new Set());
+  const [likedYouTubeTrackIds, setLikedYouTubeTrackIds] = useState<Set<string>>(new Set());
   const [nextPageToken, setNextPageToken] = useState<string | undefined>(undefined);
 
   const [selectedTrendingCountry, setSelectedTrendingCountry] = useState<Country | null>(null);
@@ -78,6 +81,15 @@ export default function YouTubeMusicSearchPlayer() {
   const { toast } = useToast();
   const observer = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
+
+
+  useEffect(() => {
+    if (user) {
+      getLikedSongIdsAction(user.uid, 'youtube').then(ids => {
+        setLikedYouTubeTrackIds(new Set(ids));
+      });
+    }
+  }, [user]);
 
 
   const loadFallbackResults = useCallback(async () => {
@@ -105,14 +117,12 @@ export default function YouTubeMusicSearchPlayer() {
 
     if (isNewQuery) {
       setIsLoading(true);
-      setYtResults([]); // Clear previous main results for a new query
+      setYtResults([]); 
       setNextPageToken(undefined);
-      setHasLoadedInitialDiscoverOrSearched(false); // Reset this flag
-      // Fallback display is handled based on results below
+      setHasLoadedInitialDiscoverOrSearched(false); 
     } else if (pageToken) {
       setIsLoadMoreLoading(true);
     } else {
-       // This case should ideally be covered by isNewQuery if it's not a pagination call
       setIsLoading(true);
       setHasLoadedInitialDiscoverOrSearched(false);
     }
@@ -155,12 +165,12 @@ export default function YouTubeMusicSearchPlayer() {
 
   useEffect(() => {
     let queryForEffect = "";
-    let titleForEffect = "Music Explorer"; // Default, will be updated by tab logic
+    let titleForEffect = "Music Explorer"; 
     let regionForEffect: string | undefined = undefined;
     let doFetch = true;
 
     if (activeTab !== "TRENDING_BY_COUNTRY" && selectedTrendingCountry) {
-        setSelectedTrendingCountry(null); // Reset country if not on the country tab
+        setSelectedTrendingCountry(null); 
     }
 
     switch (activeTab) {
@@ -186,7 +196,7 @@ export default function YouTubeMusicSearchPlayer() {
                 queryForEffect = selectedTrendingCountry.queryTerm;
                 regionForEffect = selectedTrendingCountry.code;
             } else {
-                 doFetch = false; // Don't fetch if no country is selected
+                 doFetch = false; 
             }
             break;
         case "SEARCH":
@@ -195,10 +205,10 @@ export default function YouTubeMusicSearchPlayer() {
             if (trimmedSearch) {
                 queryForEffect = trimmedSearch;
             } else {
-                doFetch = false; // Don't fetch if search term is empty
+                doFetch = false; 
             }
             break;
-        default: // Should not happen with defined tabs
+        default: 
             doFetch = false;
             titleForEffect = "Select a category";
     }
@@ -208,9 +218,8 @@ export default function YouTubeMusicSearchPlayer() {
     setCurrentApiRegion(regionForEffect);
 
     if (doFetch && queryForEffect) {
-        fetchMusic(queryForEffect, regionForEffect, undefined, true); // true for isNewQuery
+        fetchMusic(queryForEffect, regionForEffect, undefined, true); 
     } else if (!doFetch && (activeTab === "SEARCH" || activeTab === "TRENDING_BY_COUNTRY")) {
-        // If not fetching (e.g., empty search or no country selected), clear previous results for these tabs
         setYtResults([]);
         setNextPageToken(undefined);
         setIsLoading(false);
@@ -218,7 +227,7 @@ export default function YouTubeMusicSearchPlayer() {
         setDisplayFallbackSection(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, selectedTrendingCountry, ytSearchTerm]); // fetchMusic is stable via useCallback
+  }, [activeTab, selectedTrendingCountry, ytSearchTerm]); 
 
 
   useEffect(() => {
@@ -303,31 +312,46 @@ export default function YouTubeMusicSearchPlayer() {
     const searchTerm = ytSearchTerm.trim();
     if (!searchTerm) {
       toast({ title: "Empty Search", description: "Please enter a song or artist to search."});
-      // No need to call fetchMusic here, the main useEffect handles clearing results for empty search
       return;
     }
     if (activeTab !== "SEARCH") {
-        setActiveTab("SEARCH"); // Main useEffect will trigger fetch
+        setActiveTab("SEARCH"); 
     } else {
-      // If already on search tab, main useEffect will also trigger due to ytSearchTerm change if value changed,
-      // but explicit fetch here ensures it happens if search term is re-submitted same.
       fetchMusic(searchTerm, undefined, undefined, true);
     }
   };
 
 
-  const handleLikeTrack = (track: YouTubeMusicSearchResult) => {
-    setLikedTracks(prevLikedTracks => {
-      const newLikedTracks = new Set(prevLikedTracks);
-      if (newLikedTracks.has(track.videoId)) {
-        newLikedTracks.delete(track.videoId);
-        toast({ title: "Unliked", description: `${track.title} removed from likes.` });
-      } else {
-        newLikedTracks.add(track.videoId);
-        toast({ title: "Liked!", description: `${track.title} added to likes.` });
-      }
-      return newLikedTracks;
-    });
+  const handleToggleLikeTrack = async (track: YouTubeMusicSearchResult) => {
+    if (!user) {
+      toast({ title: "Login Required", description: "Please log in to like songs.", variant: "default" });
+      return;
+    }
+    try {
+      const result = await toggleLikeSongAction({
+        userId: user.uid,
+        songId: track.videoId,
+        title: track.title,
+        artist: track.artist,
+        thumbnailUrl: track.thumbnailUrl,
+        source: 'youtube',
+        youtubeVideoUrl: track.youtubeVideoUrl,
+      });
+
+      setLikedYouTubeTrackIds(prevLiked => {
+        const newLiked = new Set(prevLiked);
+        if (result.liked) {
+          newLiked.add(track.videoId);
+          toast({ title: "Liked!", description: `${track.title} added to your music.` });
+        } else {
+          newLiked.delete(track.videoId);
+          toast({ title: "Unliked", description: `${track.title} removed from your music.` });
+        }
+        return newLiked;
+      });
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Could not update like status.", variant: "destructive" });
+    }
   };
 
   const handleTabChange = (value: string) => {
@@ -403,8 +427,8 @@ export default function YouTubeMusicSearchPlayer() {
               playButtonText="Play Audio"
               playButtonIcon={Play}
               isActive={currentPlayingYoutubeTrack?.videoId === track.videoId}
-              onLike={() => handleLikeTrack(track)}
-              isLiked={likedTracks.has(track.videoId)}
+              onLike={() => handleToggleLikeTrack(track)}
+              isLiked={likedYouTubeTrackIds.has(track.videoId)}
               likeButtonIcon={Heart}
             />
           ))}
@@ -594,8 +618,8 @@ export default function YouTubeMusicSearchPlayer() {
                             playButtonText="Play Audio"
                             playButtonIcon={Play}
                             isActive={currentPlayingYoutubeTrack?.videoId === track.videoId}
-                            onLike={() => handleLikeTrack(track)}
-                            isLiked={likedTracks.has(track.videoId)}
+                            onLike={() => handleToggleLikeTrack(track)}
+                            isLiked={likedYouTubeTrackIds.has(track.videoId)}
                             likeButtonIcon={Heart}
                         />
                     ))}
@@ -612,4 +636,3 @@ export default function YouTubeMusicSearchPlayer() {
     </div>
   );
 }
-

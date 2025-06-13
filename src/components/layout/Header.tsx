@@ -8,7 +8,7 @@ import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import { Menu, Music, User, LogIn, LogOut, Search as SearchIcon, LayoutDashboard, Sun, Moon } from 'lucide-react';
+import { Menu, Music, User, LogIn, LogOut, Search as SearchIcon, LayoutDashboard, Sun, Moon, Heart } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 import { useTheme } from '@/context/ThemeContext';
@@ -37,6 +37,7 @@ export default function Header() {
 
   const navLinks = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/my-music', label: 'My Music', icon: Heart },
     { href: '/search', label: 'Search', icon: SearchIcon },
   ];
 
@@ -118,10 +119,10 @@ export default function Header() {
               </Button>
             </SheetTrigger>
             <SheetContent side="right">
-              <SheetHeader className="mb-4"> {/* Added mb-4 for spacing */}
+              <SheetHeader className="mb-4">
                 <SheetTitle>Navigation</SheetTitle>
               </SheetHeader>
-              <nav className="flex flex-col space-y-2"> {/* Removed mt-4, spacing handled by SheetHeader margin */}
+              <nav className="flex flex-col space-y-2">
                 <NavContent mobile />
               </nav>
             </SheetContent>
