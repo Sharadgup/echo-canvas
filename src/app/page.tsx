@@ -23,12 +23,12 @@ export default function HomePage() {
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)] text-center p-4">
       <div className="mb-8">
         <Image 
-          src="https://placehold.co/300x200.png" 
-          alt="Abstract music visualization" 
-          width={300} 
-          height={200} 
+          src="https://placehold.co/600x400.png" 
+          alt="Person enjoying music with headphones and visual sound waves" 
+          width={450} 
+          height={300} 
           className="rounded-lg shadow-xl"
-          data-ai-hint="abstract music"
+          data-ai-hint="headphones music"
           priority 
         />
       </div>
