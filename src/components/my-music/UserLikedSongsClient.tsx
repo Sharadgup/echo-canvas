@@ -4,16 +4,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { getLikedSongsAction, toggleLikeSongAction, type LikedSong } from "@/app/actions/likedMusicActions";
 import SongCard from "@/components/playlist/SongCard";
-import { Loader2, Music, Heart, Play } from "lucide-react";
+import { Loader2, Music, Heart, Play, X, Music2, ChevronDown, ChevronUp, Pause } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-// Ensure YouTubeMusicSearchResult is imported if currentPlayingTrack uses its structure
-import type { YouTubeMusicSearchResult } from "@/app/actions/youtubeMusicActions";
 import Image from "next/image";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { X, Music2 } from "lucide-react"; // Music2 for player icon
 import YouTubeLyricsDisplay from "@/components/youtube/YouTubeLyricsDisplay";
 
 
@@ -26,7 +23,10 @@ export default function UserLikedSongsClient({ userId }: UserLikedSongsClientPro
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
+
   const [currentPlayingTrack, setCurrentPlayingTrack] = useState<LikedSong | null>(null);
+  const [isPlayerMinimized, setIsPlayerMinimized] = useState(false);
+  const [isPlayerBarPlaying, setIsPlayerBarPlaying] = useState(false);
 
 
   const fetchLikedSongs = useCallback(async () => {
@@ -51,34 +51,51 @@ export default function UserLikedSongsClient({ userId }: UserLikedSongsClientPro
   const handleToggleLike = async (song: LikedSong) => {
     try {
       // Optimistically update UI
-      setLikedSongs(prevSongs => prevSongs.filter(s => s.songId !== song.songId));
-      
+      setLikedSongs(prevSongs => prevSongs.filter(s => s.songId !== song.songId && s.source === song.source));
+      if (currentPlayingTrack?.songId === song.songId && currentPlayingTrack?.source === song.source) {
+        // If the unliked song is currently playing, close the player
+        handleClosePlayer();
+      }
+
       await toggleLikeSongAction({
         userId,
         songId: song.songId,
         title: song.title,
         artist: song.artist,
         thumbnailUrl: song.thumbnailUrl,
-        source: song.source, // 'youtube' or 'uploaded'
+        source: song.source,
         youtubeVideoUrl: song.source === 'youtube' ? `https://www.youtube.com/watch?v=${song.songId}` : undefined,
       });
       toast({ title: "Unliked", description: `${song.title} removed from your liked music.` });
-      // No need to refetch, UI is already updated. If toggleLike also returned the new state, we could use that.
     } catch (err) {
       console.error("Error unliking song:", err);
       toast({ title: "Error", description: "Could not unlike song.", variant: "destructive" });
-      // Revert optimistic update if error
-      fetchLikedSongs();
+      fetchLikedSongs(); // Revert optimistic update if error
     }
   };
 
-  const handlePlaySong = (song: LikedSong) => {
+  const handleSelectTrackForPlayer = (song: LikedSong) => {
     if (song.source === 'youtube') {
       setCurrentPlayingTrack(song);
+      setIsPlayerMinimized(false);
+      setIsPlayerBarPlaying(true);
     } else {
-      // Placeholder for playing uploaded songs
-      toast({ title: "Playback (Mock)", description: `Playing uploaded song: ${song.title}` });
+      toast({ title: "Playback (Mock)", description: `Playing uploaded song: ${song.title}. Full player for uploaded songs coming soon!` });
+      // Potentially set currentPlayingTrack for uploaded songs if a generic player is implemented
     }
+  };
+
+  const handleTogglePlayerBarPlayPause = () => {
+    if (!currentPlayingTrack) return;
+    setIsPlayerBarPlaying(!isPlayerBarPlaying);
+  };
+
+  const handleMinimizePlayer = () => setIsPlayerMinimized(true);
+  const handleMaximizePlayer = () => setIsPlayerMinimized(false);
+
+  const handleClosePlayer = () => {
+    setCurrentPlayingTrack(null);
+    setIsPlayerBarPlaying(false);
   };
 
 
@@ -104,21 +121,33 @@ export default function UserLikedSongsClient({ userId }: UserLikedSongsClientPro
   return (
     <div className="space-y-6">
       {currentPlayingTrack && currentPlayingTrack.source === 'youtube' && (
-         <div className="sticky top-[70px] z-20 space-y-4">
-            <Card className="shadow-lg border-primary bg-background/95 backdrop-blur-sm">
-            <CardHeader>
-                <CardTitle className="flex justify-between items-center text-lg font-headline">
-                <span className="truncate flex items-center">
-                    <Music2 className="mr-2 h-5 w-5 text-primary animate-pulse [animation-duration:1.5s]" />
-                    Now Playing: {currentPlayingTrack.title}
-                </span>
-                <Button variant="ghost" size="icon" onClick={() => setCurrentPlayingTrack(null)} aria-label="Close player">
-                    <X className="h-5 w-5" />
-                </Button>
-                </CardTitle>
-                <CardDescription>{currentPlayingTrack.artist}</CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col items-center">
+         <div className="sticky top-[70px] z-30 space-y-2">
+          {!isPlayerMinimized ? (
+            // MAXIMIZED PLAYER
+            <Card className="shadow-xl border-primary bg-background/95 backdrop-blur-md">
+              <CardHeader>
+                <div className="flex justify-between items-center">
+                  <CardTitle className="flex items-center text-lg font-headline truncate">
+                    <Music2 className="mr-2 h-5 w-5 text-primary flex-shrink-0" />
+                     <span className="truncate" title={currentPlayingTrack.title}>
+                        Now Playing: {currentPlayingTrack.title}
+                    </span>
+                  </CardTitle>
+                  <div className="flex items-center space-x-1 flex-shrink-0">
+                    <Button variant="ghost" size="icon" onClick={handleTogglePlayerBarPlayPause} aria-label={isPlayerBarPlaying ? "Pause" : "Play"}>
+                      {isPlayerBarPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={handleMinimizePlayer} aria-label="Minimize player">
+                      <ChevronDown className="h-5 w-5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={handleClosePlayer} aria-label="Close player">
+                      <X className="h-5 w-5" />
+                    </Button>
+                  </div>
+                </div>
+                <CardDescription className="truncate" title={currentPlayingTrack.artist || 'Unknown Artist'}>{currentPlayingTrack.artist || 'Unknown Artist'}</CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col items-center pt-2">
                  {currentPlayingTrack.thumbnailUrl && (
                     <Image
                         src={currentPlayingTrack.thumbnailUrl.replace('mqdefault.jpg', 'hqdefault.jpg')}
@@ -127,24 +156,65 @@ export default function UserLikedSongsClient({ userId }: UserLikedSongsClientPro
                         height={180}
                         className="rounded-md shadow-md mb-4"
                         data-ai-hint="music video thumbnail"
+                        priority={true}
                     />
                 )}
-                <iframe
-                    key={currentPlayingTrack.songId} // Use songId which is videoId for YouTube tracks
+                {isPlayerBarPlaying && (
+                  <iframe
+                    key={currentPlayingTrack.songId + "-liked-player"}
                     width="0"
                     height="0"
                     style={{ position: 'absolute', top: '-9999px', left: '-9999px', border: 'none' }}
                     src={`https://www.youtube.com/embed/${currentPlayingTrack.songId}?autoplay=1&enablejsapi=1&origin=${typeof window !== 'undefined' ? window.location.origin : ''}`}
                     title="YouTube audio player (hidden)"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                ></iframe>
-                <p className="text-sm text-muted-foreground mt-2">Audio is playing. Close player with 'X' above to stop.</p>
-            </CardContent>
+                  ></iframe>
+                )}
+                 {!isPlayerBarPlaying && (
+                    <div className="w-full h-[180px] bg-muted flex items-center justify-center rounded-md my-4">
+                        <p className="text-muted-foreground">Paused</p>
+                    </div>
+                 )}
+              </CardContent>
+              {isPlayerBarPlaying && (
+                <YouTubeLyricsDisplay
+                    videoId={currentPlayingTrack.songId}
+                    videoTitle={currentPlayingTrack.title}
+                />
+              )}
             </Card>
-           <YouTubeLyricsDisplay
-                videoId={currentPlayingTrack.songId} // songId is videoId here
-                videoTitle={currentPlayingTrack.title}
-            />
+          ) : (
+            // MINIMIZED PLAYER
+            <Card className="shadow-lg bg-background/95 backdrop-blur-md p-2">
+              <div className="flex items-center justify-between space-x-2">
+                {currentPlayingTrack.thumbnailUrl && (
+                  <Image
+                    src={currentPlayingTrack.thumbnailUrl}
+                    alt="mini thumbnail"
+                    width={40}
+                    height={40}
+                    className="rounded flex-shrink-0"
+                    data-ai-hint="song thumbnail"
+                  />
+                )}
+                <div className="flex-grow overflow-hidden mx-2">
+                  <p className="text-sm font-semibold truncate" title={currentPlayingTrack.title}>{currentPlayingTrack.title}</p>
+                  <p className="text-xs text-muted-foreground truncate" title={currentPlayingTrack.artist || 'Unknown Artist'}>{currentPlayingTrack.artist || 'Unknown Artist'}</p>
+                </div>
+                <div className="flex items-center space-x-1 flex-shrink-0">
+                  <Button variant="ghost" size="icon" onClick={handleTogglePlayerBarPlayPause} aria-label={isPlayerBarPlaying ? "Pause" : "Play"}>
+                    {isPlayerBarPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={handleMaximizePlayer} aria-label="Maximize player">
+                    <ChevronUp className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={handleClosePlayer} aria-label="Close player">
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          )}
         </div>
       )}
 
@@ -163,16 +233,17 @@ export default function UserLikedSongsClient({ userId }: UserLikedSongsClientPro
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {likedSongs.map(song => (
             <SongCard
-              key={song.songId + '-' + song.source} // Ensure key is unique if songId could repeat across sources
+              key={song.songId + '-' + song.source}
               title={song.title}
               artist={song.artist}
               albumArtUrl={song.thumbnailUrl || `https://placehold.co/300x300.png?text=${encodeURIComponent(song.title.substring(0,10))}`}
-              onPlay={() => handlePlaySong(song)}
+              data-ai-hint={song.source === 'youtube' ? "youtube music" : "uploaded music"}
+              onPlay={() => handleSelectTrackForPlayer(song)}
               playButtonText="Play Audio"
               playButtonIcon={Play}
-              isActive={currentPlayingTrack?.songId === song.songId && currentPlayingTrack?.source === song.source}
+              isActive={currentPlayingTrack?.songId === song.songId && currentPlayingTrack?.source === song.source && isPlayerBarPlaying}
               onLike={() => handleToggleLike(song)}
-              isLiked={true} // All songs on this page are liked
+              isLiked={true} 
               likeButtonIcon={Heart}
             />
           ))}

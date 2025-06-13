@@ -2,11 +2,11 @@
 "use client";
 
 import { useState, FormEvent, useEffect, useRef, useCallback } from "react";
-import Image from "next/image"; // Added for thumbnail display
+import Image from "next/image";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Search as SearchIcon, Loader2, Play, X, Music, Heart, Mic, MicOff, Globe, MapPin, Music2 } from "lucide-react";
+import { Search as SearchIcon, Loader2, Play, X, Music, Heart, Mic, MicOff, Globe, MapPin, Music2, ChevronDown, ChevronUp, Pause } from "lucide-react";
 import SongCard from "@/components/playlist/SongCard";
 import { useToast } from "@/hooks/use-toast";
 import type { YouTubeMusicSearchResult, YouTubeMusicSearchResponse } from "@/app/actions/youtubeMusicActions";
@@ -16,7 +16,7 @@ import YouTubeLyricsDisplay from "./YouTubeLyricsDisplay";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuthContext } from "@/context/AuthContext";
-import { toggleLikeSongAction, getLikedSongIdsAction, type LikedSong } from "@/app/actions/likedMusicActions";
+import { toggleLikeSongAction, getLikedSongIdsAction } from "@/app/actions/likedMusicActions";
 
 
 type CategoryTab = "DISCOVER" | "INDIA" | "USA" | "GLOBAL_TRENDING" | "TRENDING_BY_COUNTRY" | "SEARCH";
@@ -57,11 +57,14 @@ export default function YouTubeMusicSearchPlayer() {
   const [ytResults, setYtResults] = useState<YouTubeMusicSearchResult[]>([]);
   const [resultsTitle, setResultsTitle] = useState<string>("Discover Music");
 
-  const [isLoading, setIsLoading] = useState(true); 
+  const [isLoading, setIsLoading] = useState(true);
   const [isLoadMoreLoading, setIsLoadMoreLoading] = useState(false);
   const [hasLoadedInitialDiscoverOrSearched, setHasLoadedInitialDiscoverOrSearched] = useState(false);
 
   const [currentPlayingYoutubeTrack, setCurrentPlayingYoutubeTrack] = useState<YouTubeMusicSearchResult | null>(null);
+  const [isPlayerMinimized, setIsPlayerMinimized] = useState(false);
+  const [isPlayerBarPlaying, setIsPlayerBarPlaying] = useState(false);
+
   const [likedYouTubeTrackIds, setLikedYouTubeTrackIds] = useState<Set<string>>(new Set());
   const [nextPageToken, setNextPageToken] = useState<string | undefined>(undefined);
 
@@ -117,9 +120,9 @@ export default function YouTubeMusicSearchPlayer() {
 
     if (isNewQuery) {
       setIsLoading(true);
-      setYtResults([]); 
+      setYtResults([]);
       setNextPageToken(undefined);
-      setHasLoadedInitialDiscoverOrSearched(false); 
+      setHasLoadedInitialDiscoverOrSearched(false);
     } else if (pageToken) {
       setIsLoadMoreLoading(true);
     } else {
@@ -165,12 +168,12 @@ export default function YouTubeMusicSearchPlayer() {
 
   useEffect(() => {
     let queryForEffect = "";
-    let titleForEffect = "Music Explorer"; 
+    let titleForEffect = "Music Explorer";
     let regionForEffect: string | undefined = undefined;
     let doFetch = true;
 
     if (activeTab !== "TRENDING_BY_COUNTRY" && selectedTrendingCountry) {
-        setSelectedTrendingCountry(null); 
+        setSelectedTrendingCountry(null);
     }
 
     switch (activeTab) {
@@ -196,7 +199,7 @@ export default function YouTubeMusicSearchPlayer() {
                 queryForEffect = selectedTrendingCountry.queryTerm;
                 regionForEffect = selectedTrendingCountry.code;
             } else {
-                 doFetch = false; 
+                 doFetch = false;
             }
             break;
         case "SEARCH":
@@ -205,10 +208,10 @@ export default function YouTubeMusicSearchPlayer() {
             if (trimmedSearch) {
                 queryForEffect = trimmedSearch;
             } else {
-                doFetch = false; 
+                doFetch = false;
             }
             break;
-        default: 
+        default:
             doFetch = false;
             titleForEffect = "Select a category";
     }
@@ -218,7 +221,7 @@ export default function YouTubeMusicSearchPlayer() {
     setCurrentApiRegion(regionForEffect);
 
     if (doFetch && queryForEffect) {
-        fetchMusic(queryForEffect, regionForEffect, undefined, true); 
+        fetchMusic(queryForEffect, regionForEffect, undefined, true);
     } else if (!doFetch && (activeTab === "SEARCH" || activeTab === "TRENDING_BY_COUNTRY")) {
         setYtResults([]);
         setNextPageToken(undefined);
@@ -227,7 +230,7 @@ export default function YouTubeMusicSearchPlayer() {
         setDisplayFallbackSection(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, selectedTrendingCountry, ytSearchTerm]); 
+  }, [activeTab, selectedTrendingCountry, ytSearchTerm]);
 
 
   useEffect(() => {
@@ -315,7 +318,7 @@ export default function YouTubeMusicSearchPlayer() {
       return;
     }
     if (activeTab !== "SEARCH") {
-        setActiveTab("SEARCH"); 
+        setActiveTab("SEARCH");
     } else {
       fetchMusic(searchTerm, undefined, undefined, true);
     }
@@ -384,6 +387,25 @@ export default function YouTubeMusicSearchPlayer() {
     setSelectedTrendingCountry(country);
   };
 
+  const handleSelectTrackForPlayer = (track: YouTubeMusicSearchResult) => {
+    setCurrentPlayingYoutubeTrack(track);
+    setIsPlayerMinimized(false);
+    setIsPlayerBarPlaying(true);
+  };
+
+  const handleTogglePlayerBarPlayPause = () => {
+    if (!currentPlayingYoutubeTrack) return;
+    setIsPlayerBarPlaying(!isPlayerBarPlaying);
+  };
+
+  const handleMinimizePlayer = () => setIsPlayerMinimized(true);
+  const handleMaximizePlayer = () => setIsPlayerMinimized(false);
+
+  const handleClosePlayer = () => {
+    setCurrentPlayingYoutubeTrack(null);
+    setIsPlayerBarPlaying(false);
+  };
+
 
   const ResultsSection = () => (
     <>
@@ -423,10 +445,10 @@ export default function YouTubeMusicSearchPlayer() {
               artist={track.artist}
               albumArtUrl={track.thumbnailUrl || `https://placehold.co/300x300.png?text=${encodeURIComponent(track.title.substring(0,10))}`}
               data-ai-hint="youtube music"
-              onPlay={() => setCurrentPlayingYoutubeTrack(track)}
+              onPlay={() => handleSelectTrackForPlayer(track)}
               playButtonText="Play Audio"
               playButtonIcon={Play}
-              isActive={currentPlayingYoutubeTrack?.videoId === track.videoId}
+              isActive={currentPlayingYoutubeTrack?.videoId === track.videoId && isPlayerBarPlaying}
               onLike={() => handleToggleLikeTrack(track)}
               isLiked={likedYouTubeTrackIds.has(track.videoId)}
               likeButtonIcon={Heart}
@@ -444,48 +466,100 @@ export default function YouTubeMusicSearchPlayer() {
   return (
     <div className="space-y-6">
       {currentPlayingYoutubeTrack && (
-        <div className="sticky top-[70px] z-20 space-y-4">
-            <Card className="shadow-lg border-primary bg-background/95 backdrop-blur-sm">
-            <CardHeader>
-                <CardTitle className="flex justify-between items-center text-lg font-headline">
-                <span className="truncate flex items-center">
-                    <Music2 className="mr-2 h-5 w-5 text-primary animate-pulse [animation-duration:1.5s]" />
-                    Now Playing: {currentPlayingYoutubeTrack.title}
-                </span>
-                <Button variant="ghost" size="icon" onClick={() => setCurrentPlayingYoutubeTrack(null)} aria-label="Close player">
-                    <X className="h-5 w-5" />
-                </Button>
-                </CardTitle>
-                <CardDescription>{currentPlayingYoutubeTrack.artist}</CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col items-center">
+         <div className="sticky top-[70px] z-30 space-y-2">
+          {!isPlayerMinimized ? (
+            // MAXIMIZED PLAYER
+            <Card className="shadow-xl border-primary bg-background/95 backdrop-blur-md">
+              <CardHeader>
+                <div className="flex justify-between items-center">
+                  <CardTitle className="flex items-center text-lg font-headline truncate">
+                    <Music2 className="mr-2 h-5 w-5 text-primary flex-shrink-0" />
+                    <span className="truncate" title={currentPlayingYoutubeTrack.title}>
+                        Now Playing: {currentPlayingYoutubeTrack.title}
+                    </span>
+                  </CardTitle>
+                  <div className="flex items-center space-x-1 flex-shrink-0">
+                    <Button variant="ghost" size="icon" onClick={handleTogglePlayerBarPlayPause} aria-label={isPlayerBarPlaying ? "Pause" : "Play"}>
+                      {isPlayerBarPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={handleMinimizePlayer} aria-label="Minimize player">
+                      <ChevronDown className="h-5 w-5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={handleClosePlayer} aria-label="Close player">
+                      <X className="h-5 w-5" />
+                    </Button>
+                  </div>
+                </div>
+                <CardDescription className="truncate" title={currentPlayingYoutubeTrack.artist}>{currentPlayingYoutubeTrack.artist}</CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col items-center pt-2">
                 {currentPlayingYoutubeTrack.thumbnailUrl && (
-                    <Image
-                        src={currentPlayingYoutubeTrack.thumbnailUrl.replace('mqdefault.jpg', 'hqdefault.jpg')}
-                        alt={`Thumbnail for ${currentPlayingYoutubeTrack.title}`}
-                        width={320}
-                        height={180}
-                        className="rounded-md shadow-md mb-4"
-                        data-ai-hint="music video thumbnail"
-                        priority={true}
-                    />
+                  <Image
+                    src={currentPlayingYoutubeTrack.thumbnailUrl.replace('mqdefault.jpg', 'hqdefault.jpg')}
+                    alt={`Thumbnail for ${currentPlayingYoutubeTrack.title}`}
+                    width={320}
+                    height={180}
+                    className="rounded-md shadow-md mb-4"
+                    data-ai-hint="music video thumbnail"
+                    priority={true}
+                  />
                 )}
-                <iframe
-                    key={currentPlayingYoutubeTrack.videoId}
+                {isPlayerBarPlaying && (
+                  <iframe
+                    key={currentPlayingYoutubeTrack.videoId + "-maximized-player"}
                     width="0"
                     height="0"
                     style={{ position: 'absolute', top: '-9999px', left: '-9999px', border: 'none' }}
                     src={`https://www.youtube.com/embed/${currentPlayingYoutubeTrack.videoId}?autoplay=1&enablejsapi=1&origin=${typeof window !== 'undefined' ? window.location.origin : ''}`}
                     title="YouTube audio player (hidden)"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                ></iframe>
-                <p className="text-sm text-muted-foreground mt-2">Audio is playing. Close player with 'X' above to stop.</p>
-            </CardContent>
+                  ></iframe>
+                )}
+                 {!isPlayerBarPlaying && (
+                    <div className="w-full h-[180px] bg-muted flex items-center justify-center rounded-md my-4">
+                        <p className="text-muted-foreground">Paused</p>
+                    </div>
+                 )}
+              </CardContent>
+              {isPlayerBarPlaying && (
+                <YouTubeLyricsDisplay
+                  videoId={currentPlayingYoutubeTrack.videoId}
+                  videoTitle={currentPlayingYoutubeTrack.title}
+                />
+              )}
             </Card>
-            <YouTubeLyricsDisplay
-                videoId={currentPlayingYoutubeTrack.videoId}
-                videoTitle={currentPlayingYoutubeTrack.title}
-            />
+          ) : (
+            // MINIMIZED PLAYER
+            <Card className="shadow-lg bg-background/95 backdrop-blur-md p-2">
+              <div className="flex items-center justify-between space-x-2">
+                {currentPlayingYoutubeTrack.thumbnailUrl && (
+                  <Image
+                    src={currentPlayingYoutubeTrack.thumbnailUrl}
+                    alt="mini thumbnail"
+                    width={40}
+                    height={40}
+                    className="rounded flex-shrink-0"
+                    data-ai-hint="song thumbnail"
+                  />
+                )}
+                <div className="flex-grow overflow-hidden mx-2">
+                  <p className="text-sm font-semibold truncate" title={currentPlayingYoutubeTrack.title}>{currentPlayingYoutubeTrack.title}</p>
+                  <p className="text-xs text-muted-foreground truncate" title={currentPlayingYoutubeTrack.artist}>{currentPlayingYoutubeTrack.artist}</p>
+                </div>
+                <div className="flex items-center space-x-1 flex-shrink-0">
+                  <Button variant="ghost" size="icon" onClick={handleTogglePlayerBarPlayPause} aria-label={isPlayerBarPlaying ? "Pause" : "Play"}>
+                    {isPlayerBarPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={handleMaximizePlayer} aria-label="Maximize player">
+                    <ChevronUp className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={handleClosePlayer} aria-label="Close player">
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          )}
         </div>
       )}
 
@@ -614,10 +688,10 @@ export default function YouTubeMusicSearchPlayer() {
                             artist={track.artist}
                             albumArtUrl={track.thumbnailUrl || `https://placehold.co/300x300.png?text=${encodeURIComponent(track.title.substring(0,10))}`}
                             data-ai-hint="youtube music fallback"
-                            onPlay={() => setCurrentPlayingYoutubeTrack(track)}
+                            onPlay={() => handleSelectTrackForPlayer(track)}
                             playButtonText="Play Audio"
                             playButtonIcon={Play}
-                            isActive={currentPlayingYoutubeTrack?.videoId === track.videoId}
+                            isActive={currentPlayingYoutubeTrack?.videoId === track.videoId && isPlayerBarPlaying}
                             onLike={() => handleToggleLikeTrack(track)}
                             isLiked={likedYouTubeTrackIds.has(track.videoId)}
                             likeButtonIcon={Heart}
