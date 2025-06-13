@@ -8,7 +8,7 @@ import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import { Menu, Music, User, LogIn, LogOut, Search as SearchIcon, LayoutDashboard, Sun, Moon, Heart } from 'lucide-react';
+import { Menu, Music, User, LogIn, LogOut, Search as SearchIcon, LayoutDashboard, Sun, Moon, Heart, Mic } from 'lucide-react'; // Added Mic
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 import { useTheme } from '@/context/ThemeContext';
@@ -39,6 +39,7 @@ export default function Header() {
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/my-music', label: 'My Music', icon: Heart },
     { href: '/search', label: 'Search', icon: SearchIcon },
+    { href: '/voice-analysis', label: 'Voice Analysis', icon: Mic }, // Added Voice Analysis
   ];
 
   const ThemeToggleButton = ({ isMobile = false }: { isMobile?: boolean }) => (
