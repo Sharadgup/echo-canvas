@@ -3,47 +3,52 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Mic, Square, Loader2, Search, Youtube, Play, AlertTriangle, Info, Music, Heart } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Mic, Square, Loader2, Search, Youtube, Play, AlertTriangle, Info, Music, Heart, X, ChevronDown, ChevronUp, Pause } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { analyzeAudioForSearchAction } from "@/app/actions/aiActions";
 import type { AnalyzeAudioOutput } from "@/ai/flows/analyze-audio-for-search-flow";
 import { searchYoutubeMusicAction, type YouTubeMusicSearchResult } from "@/app/actions/youtubeMusicActions";
-import SongCard from "@/components/playlist/SongCard"; // Reusing SongCard
-import YouTubeMusicSearchPlayer from "@/components/youtube/YouTubeMusicSearchPlayer"; // To reuse parts of the player logic if needed or for consistency
+import SongCard from "@/components/playlist/SongCard";
 import { useAuthContext } from "@/context/AuthContext";
 import { toggleLikeSongAction, getLikedSongIdsAction } from "@/app/actions/likedMusicActions";
 import Image from "next/image";
 import YouTubeLyricsDisplay from "../youtube/YouTubeLyricsDisplay";
+import { cn } from "@/lib/utils";
 
+type AnalysisStep = "idle" | "requestingPermission" | "permissionDenied" | "listening" | "processingAudio" | "analyzing" | "searching" | "results" | "error";
 
 export default function VoiceAnalyzerClient() {
   const { user } = useAuthContext();
   const { toast } = useToast();
 
-  const [isRecording, setIsRecording] = useState(false);
+  const [currentStep, setCurrentStep] = useState<AnalysisStep>("idle");
+  
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [audioDataUri, setAudioDataUri] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
-  const [isLoadingMicPermission, setIsLoadingMicPermission] = useState(false);
-  const [hasMicPermission, setHasMicPermission] = useState<boolean | null>(null);
   const [micError, setMicError] = useState<string | null>(null);
 
-  const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalyzeAudioOutput | null>(null);
-  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [apiError, setApiError] = useState<string | null>(null);
 
-  const [isLoadingSearch, setIsLoadingSearch] = useState(false);
   const [youtubeResults, setYoutubeResults] = useState<YouTubeMusicSearchResult[]>([]);
-  const [searchError, setSearchError] = useState<string | null>(null);
-
+  
   const [currentPlayingYoutubeTrack, setCurrentPlayingYoutubeTrack] = useState<YouTubeMusicSearchResult | null>(null);
   const [isPlayerMinimized, setIsPlayerMinimized] = useState(false);
   const [isPlayerBarPlaying, setIsPlayerBarPlaying] = useState(false);
   const [likedYouTubeTrackIds, setLikedYouTubeTrackIds] = useState<Set<string>>(new Set());
+
+  // Refs for animation
+  const animationFrameRef = useRef<number>();
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const dataArrayRef = useRef<Uint8Array | null>(null);
+  const [audioActivity, setAudioActivity] = useState(0);
 
 
   useEffect(() => {
@@ -54,18 +59,99 @@ export default function VoiceAnalyzerClient() {
     }
   }, [user]);
 
-  const requestMicPermission = async () => {
-    setIsLoadingMicPermission(true);
+  const resetState = (nextStep: AnalysisStep = "idle") => {
+    setAudioBlob(null);
+    setAudioDataUri(null);
+    setAnalysisResult(null);
+    setYoutubeResults([]);
+    setApiError(null);
     setMicError(null);
+    setCurrentStep(nextStep);
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+      mediaRecorderRef.current.stop();
+    }
+    mediaRecorderRef.current = null;
+    audioChunksRef.current = [];
+    if (sourceRef.current) sourceRef.current.disconnect();
+    if (analyserRef.current) analyserRef.current.disconnect();
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        // audioContextRef.current.close(); // Closing causes issues with re-init
+        // audioContextRef.current = null;
+    }
+    if(animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+    setAudioActivity(0);
+  };
+  
+  const drawAudioVisualizer = useCallback(() => {
+    if (analyserRef.current && dataArrayRef.current) {
+      analyserRef.current.getByteFrequencyData(dataArrayRef.current);
+      let sum = 0;
+      for (let i = 0; i < dataArrayRef.current.length; i++) {
+        sum += dataArrayRef.current[i];
+      }
+      const average = sum / dataArrayRef.current.length;
+      setAudioActivity(Math.min(1, average / 128)); // Normalize to 0-1
+    }
+    animationFrameRef.current = requestAnimationFrame(drawAudioVisualizer);
+  }, []);
+
+
+  const startRecordingFlow = async () => {
+    resetState("requestingPermission");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      setHasMicPermission(true);
-      // We don't need to do anything with the stream directly here,
-      // as MediaRecorder will use it. We can close this initial stream.
-      stream.getTracks().forEach(track => track.stop());
+      
+      // Initialize Web Audio API for visualizer
+      if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      analyserRef.current = audioContextRef.current.createAnalyser();
+      analyserRef.current.fftSize = 256;
+      const bufferLength = analyserRef.current.frequencyBinCount;
+      dataArrayRef.current = new Uint8Array(bufferLength);
+      sourceRef.current = audioContextRef.current.createMediaStreamSource(stream);
+      sourceRef.current.connect(analyserRef.current);
+      // Do not connect analyser to destination to avoid feedback
+
+      mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      audioChunksRef.current = [];
+
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        audioChunksRef.current.push(event.data);
+      };
+
+      mediaRecorderRef.current.onstop = async () => {
+        if (sourceRef.current) sourceRef.current.disconnect();
+        if (analyserRef.current) analyserRef.current.disconnect();
+        // audioContextRef.current?.close(); // Potential issue here if closed too early
+        stream.getTracks().forEach(track => track.stop());
+        if(animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+        setAudioActivity(0);
+
+        const completeAudioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        setAudioBlob(completeAudioBlob);
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setAudioDataUri(reader.result as string);
+          // Automatically proceed to analysis
+          if (reader.result) {
+            handleFullAnalysis(reader.result as string);
+          } else {
+            setApiError("Failed to read audio data after recording.");
+            setCurrentStep("error");
+          }
+        };
+        reader.readAsDataURL(completeAudioBlob);
+        setCurrentStep("processingAudio");
+      };
+
+      mediaRecorderRef.current.start();
+      setCurrentStep("listening");
+      toast({ title: "Listening...", description: "Tap the icon to stop." });
+      drawAudioVisualizer();
+
     } catch (error: any) {
       console.error("Error accessing microphone:", error);
-      setHasMicPermission(false);
       let message = "Could not access microphone.";
       if (error.name === "NotFoundError" || error.name === "DevicesNotFoundError") {
         message = "No microphone found. Please connect a microphone and try again.";
@@ -73,111 +159,60 @@ export default function VoiceAnalyzerClient() {
         message = "Microphone access denied. Please allow microphone access in your browser settings.";
       }
       setMicError(message);
+      setCurrentStep("permissionDenied");
       toast({ variant: "destructive", title: "Microphone Error", description: message });
-    } finally {
-      setIsLoadingMicPermission(false);
-    }
-  };
-
-  const startRecording = async () => {
-    if (!hasMicPermission) {
-      await requestMicPermission();
-      // If permission is still not granted after request, return
-      if (!hasMicPermission && !navigator.mediaDevices.getUserMedia) { // Recheck after trying
-         toast({ variant: "destructive", title: "Microphone Required", description: "Microphone permission is needed to record audio." });
-         return;
-      }
-    }
-    
-    // Check again, as requestMicPermission updates hasMicPermission asynchronously
-    // Need a slight delay or a more robust way to ensure hasMicPermission is current
-    // For now, let's assume if it reached here after await, it tried.
-    // A better way would be for requestMicPermission to return a boolean.
-
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorderRef.current = new MediaRecorder(stream);
-        audioChunksRef.current = [];
-
-        mediaRecorderRef.current.ondataavailable = (event) => {
-            audioChunksRef.current.push(event.data);
-        };
-
-        mediaRecorderRef.current.onstop = () => {
-            const completeAudioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' }); // Use webm, more widely supported by Gemini
-            setAudioBlob(completeAudioBlob);
-            const reader = new FileReader();
-            reader.onloadend = () => {
-            setAudioDataUri(reader.result as string);
-            };
-            reader.readAsDataURL(completeAudioBlob);
-            stream.getTracks().forEach(track => track.stop()); // Stop mic access
-        };
-
-        mediaRecorderRef.current.start();
-        setIsRecording(true);
-        setAudioBlob(null);
-        setAudioDataUri(null);
-        setAnalysisResult(null);
-        setYoutubeResults([]);
-        setAnalysisError(null);
-        setSearchError(null);
-        toast({ title: "Recording Started", description: "Speak or play a sound..." });
-    } catch (error) {
-        // This catch is for the second attempt if the first permission check failed
-        console.error("Error starting recording after permission attempt:", error);
-        toast({ variant: "destructive", title: "Recording Failed", description: "Could not start recording. Ensure microphone is allowed." });
     }
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      toast({ title: "Recording Stopped" });
+    if (mediaRecorderRef.current && currentStep === "listening") {
+      mediaRecorderRef.current.stop(); 
+      // onstop will handle next steps
     }
   };
-
-  const handleAnalyzeAndSearch = async () => {
-    if (!audioDataUri) {
-      toast({ variant: "destructive", title: "No Audio", description: "Please record audio first." });
-      return;
-    }
-
-    setIsLoadingAnalysis(true);
+  
+  const handleFullAnalysis = async (dataUri: string) => {
+    setCurrentStep("analyzing");
     setAnalysisResult(null);
     setYoutubeResults([]);
-    setAnalysisError(null);
-    setSearchError(null);
+    setApiError(null);
 
     try {
-      const aiResponse = await analyzeAudioForSearchAction({ audioDataUri });
+      const aiResponse = await analyzeAudioForSearchAction({ audioDataUri: dataUri });
       if (aiResponse.error) {
-        setAnalysisError(aiResponse.message);
+        setApiError(aiResponse.message);
+        setCurrentStep("error");
         toast({ variant: "destructive", title: "AI Analysis Failed", description: aiResponse.message });
-        setIsLoadingAnalysis(false);
         return;
       }
-      setAnalysisResult(aiResponse as AnalyzeAudioOutput); // Type assertion
-      setIsLoadingAnalysis(false);
+      setAnalysisResult(aiResponse as AnalyzeAudioOutput);
       toast({ title: "AI Analysis Complete" });
 
-      // Now search YouTube
       if ((aiResponse as AnalyzeAudioOutput).searchQuery) {
-        setIsLoadingSearch(true);
+        setCurrentStep("searching");
         const youtubeResponse = await searchYoutubeMusicAction((aiResponse as AnalyzeAudioOutput).searchQuery);
         setYoutubeResults(youtubeResponse.results);
         if (youtubeResponse.results.length === 0) {
             toast({ title: "YouTube Search", description: "No results found for the AI generated query." });
         }
-        setIsLoadingSearch(false);
+        setCurrentStep("results");
+      } else {
+        setApiError("AI did not provide a search query.");
+        setCurrentStep("results"); // Show analysis notes even if no query
       }
     } catch (error: any) {
       console.error("Error during analysis or search:", error);
-      setAnalysisError("An unexpected error occurred during AI analysis.");
+      setApiError("An unexpected error occurred during AI analysis or YouTube search.");
+      setCurrentStep("error");
       toast({ variant: "destructive", title: "Error", description: "An unexpected error occurred." });
-      setIsLoadingAnalysis(false);
-      setIsLoadingSearch(false);
+    }
+  };
+
+  const handleMainButtonClick = () => {
+    if (currentStep === "idle" || currentStep === "results" || currentStep === "error" || currentStep === "permissionDenied") {
+      startRecordingFlow();
+    } else if (currentStep === "listening") {
+      stopRecording();
     }
   };
   
@@ -232,11 +267,97 @@ export default function VoiceAnalyzerClient() {
     }
   };
 
+  const renderCentralButtonAndStatus = () => {
+    let icon = <Mic className="h-16 w-16" />;
+    let text = "Tap to Analyze";
+    let subtext = "Record any sound or song";
+    let buttonColor = "bg-primary hover:bg-primary/90";
+    let isPulsing = false;
+
+    switch (currentStep) {
+      case "requestingPermission":
+        icon = <Loader2 className="h-16 w-16 animate-spin" />;
+        text = "Requesting Mic...";
+        subtext = "Please allow microphone access.";
+        break;
+      case "permissionDenied":
+        icon = <AlertTriangle className="h-16 w-16 text-destructive" />;
+        text = "Permission Denied";
+        subtext = micError || "Please enable microphone access in browser settings.";
+        buttonColor = "bg-muted hover:bg-muted/80";
+        break;
+      case "listening":
+        icon = <Square className="h-16 w-16" />;
+        text = "Listening...";
+        subtext = "Tap icon to stop";
+        buttonColor = "bg-red-500 hover:bg-red-600";
+        isPulsing = true;
+        break;
+      case "processingAudio":
+      case "analyzing":
+        icon = <Loader2 className="h-16 w-16 animate-spin" />;
+        text = "Processing...";
+        subtext = currentStep === "analyzing" ? "AI is analyzing your audio..." : "Finalizing audio...";
+        break;
+      case "searching":
+        icon = <Loader2 className="h-16 w-16 animate-spin" />;
+        text = "Searching...";
+        subtext = "Looking for matches on YouTube...";
+        break;
+      case "results":
+         icon = <Mic className="h-16 w-16" />;
+         text = "Analyze New Sound";
+         subtext = "Tap to start over";
+        break;
+      case "error":
+        icon = <AlertTriangle className="h-16 w-16 text-destructive" />;
+        text = "Try Again";
+        subtext = apiError || "An error occurred.";
+        buttonColor = "bg-muted hover:bg-muted/80";
+        break;
+    }
+
+    return (
+      <div className="flex flex-col items-center justify-center text-center p-8 space-y-6 min-h-[calc(100vh-20rem)] sm:min-h-[calc(100vh-25rem)]">
+        <Button
+          onClick={handleMainButtonClick}
+          disabled={currentStep === "requestingPermission" || currentStep === "processingAudio" || currentStep === "analyzing" || currentStep === "searching"}
+          className={cn(
+            "rounded-full h-48 w-48 flex flex-col items-center justify-center shadow-2xl transition-all duration-300 ease-in-out transform hover:scale-105",
+            buttonColor,
+            isPulsing && "animate-pulse-strong"
+          )}
+          aria-label={text}
+        >
+          {icon}
+        </Button>
+        <h2 className="text-2xl font-semibold mt-6">{text}</h2>
+        <p className="text-muted-foreground">{subtext}</p>
+        
+        {currentStep === "listening" && (
+           <div className="w-24 h-10 flex justify-around items-end">
+            {[...Array(5)].map((_, i) => (
+              <div
+                key={i}
+                className="w-3 bg-card-foreground/70 rounded-t-sm"
+                style={{
+                  height: `${Math.max(5, audioActivity * (60 + Math.random() * 20))}px`,
+                  transition: 'height 0.1s ease-out',
+                  animationDelay: `${i * 0.05}s`
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
 
   return (
-    <div className="space-y-6">
-       {currentPlayingYoutubeTrack && (
-         <div className="sticky top-[70px] z-30 space-y-2">
+    <div className="space-y-6 pb-16"> {/* Added padding bottom for player bar */}
+      {currentPlayingYoutubeTrack && (
+         <div className="sticky top-[65px] z-40 space-y-2"> {/* Ensure this z-index is higher than content, lower than modals/header */}
           {!isPlayerMinimized ? (
             <Card className="shadow-xl border-primary bg-background/95 backdrop-blur-md">
               <CardHeader>
@@ -249,7 +370,7 @@ export default function VoiceAnalyzerClient() {
                   </CardTitle>
                   <div className="flex items-center space-x-1 flex-shrink-0">
                     <Button variant="ghost" size="icon" onClick={handleTogglePlayerBarPlayPause} aria-label={isPlayerBarPlaying ? "Pause" : "Play"}>
-                      {isPlayerBarPlaying ? <Square className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+                      {isPlayerBarPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
                     </Button>
                     <Button variant="ghost" size="icon" onClick={handleMinimizePlayer} aria-label="Minimize player">
                       <ChevronDown className="h-5 w-5" />
@@ -316,7 +437,7 @@ export default function VoiceAnalyzerClient() {
                 </div>
                 <div className="flex items-center space-x-1 flex-shrink-0">
                   <Button variant="ghost" size="icon" onClick={handleTogglePlayerBarPlayPause} aria-label={isPlayerBarPlaying ? "Pause" : "Play"}>
-                    {isPlayerBarPlaying ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                    {isPlayerBarPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                   </Button>
                   <Button variant="ghost" size="icon" onClick={handleMaximizePlayer} aria-label="Maximize player">
                     <ChevronUp className="h-4 w-4" />
@@ -331,151 +452,84 @@ export default function VoiceAnalyzerClient() {
         </div>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="font-headline text-xl">1. Record Audio</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {hasMicPermission === false && micError && (
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Microphone Access Denied</AlertTitle>
-              <AlertDescription>{micError}</AlertDescription>
+      {renderCentralButtonAndStatus()}
+      
+      {currentStep === "results" && (
+        <div className="mt-8 space-y-6">
+          {analysisResult && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="font-headline text-lg">AI Analysis</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 p-4 bg-muted/30 rounded-md">
+                <div>
+                  <h4 className="font-semibold text-primary">Generated Search Query:</h4>
+                  <p className="text-sm font-mono p-2 bg-background rounded">{analysisResult.searchQuery || "N/A"}</p>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-primary">Analysis Notes:</h4>
+                  <p className="text-sm">{analysisResult.analysisNotes}</p>
+                </div>
+                {audioDataUri && (
+                    <div className="pt-2">
+                        <h4 className="font-semibold text-primary mb-1">Recorded Audio:</h4>
+                        <audio controls src={audioDataUri} className="w-full" />
+                    </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {apiError && !analysisResult && ( // Show API error if analysis failed but we are in 'results' step due to no query
+             <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Problem during Analysis/Search</AlertTitle>
+                <AlertDescription>{apiError}</AlertDescription>
             </Alert>
           )}
-           {hasMicPermission === null && (
-             <Button onClick={requestMicPermission} disabled={isLoadingMicPermission} className="w-full">
-              {isLoadingMicPermission ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mic className="mr-2 h-4 w-4" />}
-              Request Microphone Permission
-            </Button>
-           )}
 
-          {hasMicPermission && (
-            <div className="flex flex-col sm:flex-row gap-4">
-              <Button onClick={startRecording} disabled={isRecording} className="flex-1">
-                <Mic className="mr-2 h-4 w-4" /> Start Recording
-              </Button>
-              <Button onClick={stopRecording} disabled={!isRecording} variant="outline" className="flex-1">
-                <Square className="mr-2 h-4 w-4" /> Stop Recording
-              </Button>
-            </div>
+          {youtubeResults.length > 0 && (
+            <Card>
+                <CardHeader>
+                    <CardTitle className="font-headline text-lg flex items-center">
+                        <Youtube className="mr-2 h-5 w-5 text-red-500" /> YouTube Search Results
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {youtubeResults.map((track) => (
+                        <SongCard
+                            key={track.videoId}
+                            title={track.title}
+                            artist={track.artist}
+                            albumArtUrl={track.thumbnailUrl || `https://placehold.co/300x300.png?text=${encodeURIComponent(track.title.substring(0,10))}`}
+                            data-ai-hint="youtube music"
+                            onPlay={() => handleSelectTrackForPlayer(track)}
+                            playButtonText="Play Audio"
+                            playButtonIcon={Play}
+                            isActive={currentPlayingYoutubeTrack?.videoId === track.videoId && isPlayerBarPlaying}
+                            onLike={() => handleToggleLikeTrack(track)}
+                            isLiked={likedYouTubeTrackIds.has(track.videoId)}
+                            likeButtonIcon={Heart}
+                        />
+                        ))}
+                    </div>
+                </CardContent>
+            </Card>
           )}
-          {isRecording && (
-            <div className="text-center text-primary font-medium p-2 bg-primary/10 rounded-md">
-              Recording in progress...
-            </div>
+          
+          {analysisResult && analysisResult.searchQuery && youtubeResults.length === 0 && (
+             <Alert variant="default" className="mt-4">
+                <Info className="h-4 w-4"/>
+                <AlertTitle>No YouTube Results</AlertTitle>
+                <AlertDescription>
+                    The AI analysis completed, but no relevant YouTube tracks were found for the query: "{analysisResult.searchQuery}".
+                </AlertDescription>
+            </Alert>
           )}
-          {audioDataUri && !isRecording && (
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Recorded Audio:</p>
-              <audio controls src={audioDataUri} className="w-full" />
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {audioDataUri && !isRecording && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-headline text-xl">2. Analyze & Search</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={handleAnalyzeAndSearch} disabled={isLoadingAnalysis || isLoadingSearch} className="w-full">
-              {(isLoadingAnalysis || isLoadingSearch) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
-              {isLoadingAnalysis ? "Analyzing Audio..." : isLoadingSearch ? "Searching YouTube..." : "Analyze Audio & Search YouTube"}
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {isLoadingAnalysis && (
-        <div className="text-center py-6">
-          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" />
-          <p className="text-muted-foreground">AI is analyzing your audio...</p>
         </div>
       )}
-
-      {analysisError && (
-        <Alert variant="destructive">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>AI Analysis Failed</AlertTitle>
-          <AlertDescription>{analysisError}</AlertDescription>
-        </Alert>
-      )}
-
-      {analysisResult && !isLoadingAnalysis && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-headline text-lg">AI Analysis</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 p-4 bg-muted/30 rounded-md">
-            <div>
-              <h4 className="font-semibold text-primary">Generated Search Query:</h4>
-              <p className="text-sm font-mono p-2 bg-background rounded">{analysisResult.searchQuery}</p>
-            </div>
-            <div>
-              <h4 className="font-semibold text-primary">Analysis Notes:</h4>
-              <p className="text-sm">{analysisResult.analysisNotes}</p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {isLoadingSearch && (
-        <div className="text-center py-6">
-          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" />
-          <p className="text-muted-foreground">Searching YouTube for related music...</p>
-        </div>
-      )}
-      
-      {searchError && (
-        <Alert variant="destructive">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>YouTube Search Failed</AlertTitle>
-          <AlertDescription>{searchError}</AlertDescription>
-        </Alert>
-      )}
-
-      {youtubeResults.length > 0 && !isLoadingSearch && (
-        <Card>
-            <CardHeader>
-                <CardTitle className="font-headline text-lg flex items-center">
-                    <Youtube className="mr-2 h-5 w-5 text-red-500" /> YouTube Search Results
-                </CardTitle>
-            </CardHeader>
-            <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {youtubeResults.map((track) => (
-                    <SongCard
-                        key={track.videoId}
-                        title={track.title}
-                        artist={track.artist}
-                        albumArtUrl={track.thumbnailUrl || `https://placehold.co/300x300.png?text=${encodeURIComponent(track.title.substring(0,10))}`}
-                        data-ai-hint="youtube music"
-                        onPlay={() => handleSelectTrackForPlayer(track)}
-                        playButtonText="Play Audio"
-                        playButtonIcon={Play}
-                        isActive={currentPlayingYoutubeTrack?.videoId === track.videoId && isPlayerBarPlaying}
-                        onLike={() => handleToggleLikeTrack(track)}
-                        isLiked={likedYouTubeTrackIds.has(track.videoId)}
-                        likeButtonIcon={Heart}
-                    />
-                    ))}
-                </div>
-            </CardContent>
-        </Card>
-      )}
-      
-      {!isLoadingAnalysis && !isLoadingSearch && analysisResult && youtubeResults.length === 0 && (
-         <Alert variant="default" className="mt-4">
-            <Info className="h-4 w-4"/>
-            <AlertTitle>No YouTube Results</AlertTitle>
-            <AlertDescription>
-                The AI analysis completed, but no relevant YouTube tracks were found for the query: "{analysisResult.searchQuery}". You could try recording again or being more distinct with your sound.
-            </AlertDescription>
-        </Alert>
-      )}
-
     </div>
   );
 }
+
