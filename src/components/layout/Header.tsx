@@ -36,10 +36,10 @@ export default function Header() {
   };
 
   const navLinks = [
-    { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/', label: 'Dashboard', icon: LayoutDashboard }, // Changed from /dashboard to /
     { href: '/my-music', label: 'My Music', icon: Heart },
     { href: '/search', label: 'Search', icon: SearchIcon },
-    { href: '/voice-analysis', label: 'Sound checking', icon: Mic }, // Changed label here
+    { href: '/voice-analysis', label: 'Sound checking', icon: Mic },
   ];
 
   const ThemeToggleButton = ({ isMobile = false }: { isMobile?: boolean }) => (
